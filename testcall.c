@@ -3,8 +3,10 @@
  * inclusion with cdecl.c.
  */
 
+#define main notmain
 #include <EXTERN.h>
 #include <perl.h>
+#undef main
 #undef fprintf
 #undef fopen
 #undef fclose
@@ -123,10 +125,9 @@ int do_three_args(x, y, z)
   return ((int (*)()) test)();
 }
 
-int main(argc, argv, env)
+int main(argc, argv)
   int argc;
   char **argv;
-  char **env;
 {
   FILE *fp;
   int one_arg, three_args;

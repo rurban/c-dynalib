@@ -23,6 +23,9 @@ I32 ax;		/* used by the ST() macro */
 I32 items;
 int (*func)();
 {
+#ifdef USE_THREADS
+  dTHR;
+#endif
   STRLEN arg_len, chunk_len;
   char *arg_scalar, *arg_on_stack;
   int nbytes = 0;

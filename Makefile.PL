@@ -4,10 +4,10 @@ use strict;
 require 5.002;
 use Config;
 
-use vars qw($archname @convention $convention
-	    $num_callbacks %cflags $object
-	    $conv_xs $cbfunc_c $cdecl_h $postamble
-	    $is_gcc $is_dynamic);
+my($archname, @convention, $convention,
+   $num_callbacks, %cflags, $object,
+   $conv_xs, $cbfunc_c, $cdecl_h, $postamble,
+   $is_gcc, $is_borland, $is_dynamic);
 
 $conv_xs = "conv.xsi";
 $cbfunc_c = "cbfunc.c";
@@ -15,6 +15,7 @@ $cdecl_h = "cdecl.h";
 $object = '$(BASEEXT)$(OBJ_EXT)';
 
 $is_gcc = $Config{cc} =~ /gcc/i && $Config{gccversion} >= 2;
+$is_borland = $Config{cc} =~ /\bbcc/i;
 $is_dynamic = ($Config{usedl} eq 'define');
 use subs qw(write_conv write_cbfunc write_cdecl_h);
 
@@ -57,13 +58,13 @@ for (@ARGV) {
 $archname = $Config{archname};
 unless (@convention) {
     for (
-	 [ '^i?[x3-9]86', sub {'cdecl'} ],
+	 [ '^i?[x3-6]86', sub {'cdecl'} ],
 	 [ '^sun4-', sub {'sparc'} ],
 	 [ 'sparc', sub {'sparc'} ],
-	 [ 'alpha', sub {
+	 [ '(alpha|axp)', sub {
 			unless ($is_gcc) {
 			  $postamble .= "\nalpha-cc\$(OBJ_EXT): alpha-cc.s\n"
-			    . "\tcc -c alpha-cc.s -o \$\@\n"
+			    . "\t\$(CC) -c alpha-cc.s -o \$\@\n"
 			    . "\n#alpha-cc.s: alpha-cc.c\n"
 			    . "#\tgcc -O2 -S alpha-cc.c -o \$\@\n";
 			  $object .= " alpha-cc.o";
@@ -120,16 +121,15 @@ sub pretest {
 	return &$cant;
     }
     print PROG <<'PROG';
+#define main notmain
 #include <EXTERN.h>
 #include <perl.h>
+#undef main
 #undef fprintf
 #undef fopen
 #undef fclose
 #include <stdio.h>
-int main(argc, argv, env)
-  int argc;
-  char **argv;
-  char **env;
+int main()
 {
     FILE *fp = fopen("testtest.txt", "w");
     if (fp == NULL) {
@@ -149,7 +149,6 @@ PROG
 	unless $Verbose;
     push @candidate, "$Config{cc} $Config{ccflags} -DNARF -I$self->{PERL_INC} testtest.c -o testtest$self->{EXE_EXT}";
     push @candidate, "$Config{cc} $Config{ccflags} -DNARF -I$self->{PERL_INC} testtest.c -otesttest$self->{EXE_EXT}";
-    $self->{how_to_compile} = "$Config{cc} $Config{ccflags} -DNARF -I$self->{PERL_INC} testtest.c -o testtest$self->{EXE_EXT}";
 
     while ($self->{how_to_compile} = shift (@candidate)) {
 	unlink "testtest$self->{EXE_EXT}";
@@ -193,12 +192,12 @@ CONFIG
     print CONFIG "#include <alloca.h>\n"
 	if $self->{CC} =~ /\bcc$/;
     print CONFIG "#include <malloc.h>\n"
-	if $archname =~ /win32/i;
+	if $is_borland;
     print CONFIG (&$define_if_not("CDECL_ONE_BY_ONE",
-		  (($archname =~ /win32/i && $self->{CC} !~ /\bbcc/i)
+		  (($archname =~ /win32/i && ! $is_borland)
 		   || $is_gcc) ? 1 : 0));
     print CONFIG (&$define_if_not("CDECL_ADJUST",
-		  ($self->{CC} =~ /\bbcc/i ? -12 : 0)));
+		  ($is_borland ? -12 : 0)));
     print CONFIG (&$define_if_not("CDECL_REVERSE", 0));
 
     close CONFIG;
@@ -235,7 +234,7 @@ sub make_postamble {
 *** of the time.  Or it may crash your programs.  A better solution would
 *** be to add support for your system's calling convention.
 ***
-*** Be warned, this module is not likely to be of production quality.
+*** See DynaLib.pm for a discussion of hack30.
 ***
 WARN
 	@convention = ('hack30');

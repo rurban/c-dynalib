@@ -1,4 +1,3 @@
-# As the saying goes:
 #
 #   "Better to do it in Perl than C.
 #    Better to do it in C than Assembler.
@@ -16,7 +15,7 @@ use vars qw($GoodRet $DefConv);
 use subs qw(AUTOLOAD new LibRef DESTROY DeclareSub);
 
 
-# inline-able constants
+# inline-able constants?
 sub DYNALIB_DEFAULT_CONV ();
 sub PTR_TYPE ();
 
@@ -27,7 +26,7 @@ require DynaLoader;
 require Exporter;
 
 @ISA = qw(DynaLoader Exporter);
-$VERSION = '0.53';
+$VERSION = '0.54';
 bootstrap C::DynaLib $VERSION, \$C::DynaLib::Callback::Config;
 
 $GoodRet = '(?:[ilscILSCfdp'.(PTR_TYPE eq 'q'?'qQ':'').']?|P\d+)';
@@ -65,7 +64,9 @@ sub DESTROY {
 }
 
 sub DeclareSub {
-  local ($@);	# We eval $obj->isa and $obj->can for 5.003 compatibility.
+
+  # We eval $obj->isa and $obj->can for 5.003 compatibility.
+  local ($@);
   my $self = shift;
 
   # Calling as a method is equivalent to supplying the "libref" named arg.
@@ -74,24 +75,32 @@ sub DeclareSub {
   $@ and $is_method = (ref($self) eq 'C::DynaLib');
   my $first = ($is_method ? shift : $self);
 
-  my ($libref, $name, $ptr, $convention, $ret_type, @arg_type);
+  my ($libref, $name, $ptr, @arg_type);
+  my ($convention, $ret_type) = ($DefConv, '');
+
   if (ref($first) eq 'HASH') {
+
     # Using named parameters.
-    ! @_ && (($ptr = $first->{ptr}) || defined ($name = $first->{name}))
+    ! @_ && (($ptr = $first->{'ptr'}) || defined ($name = $first->{'name'}))
       or croak 'Usage: $lib->DeclareSub({ "name" => $func_name [, "return" => $ret_type] [, "args" => \@arg_types] [, "decl" => $decl] })';
-    $convention = $first->{decl} || $DefConv;
-    $ret_type = $first->{'return'} || '';
-    @arg_type = @{ $first->{args} || [] };
+
     $libref = $first->{'libref'};
+    $convention = $first->{'decl'} || $convention;
+    $ret_type = $first->{'return'} || $ret_type;
+    @arg_type = @{ $first->{'args'} || [] };
+
   } else {
+
     # Using positional parameters.
     ($is_method ? $name : $ptr) = $first
       or croak 'Usage: $lib->DeclareSub( $func_name [, $return_type [, \@arg_types]] )';
-    $convention = $DefConv;
-    $ret_type = shift || '';
+    $ret_type = shift || $ret_type;
     @arg_type = @_;
   }
+
   unless ($ptr) {
+
+    # No pointer, so we're looking up the function in a library...
     $libref ||= $is_method && $self->LibRef()
       or croak 'C::DynaLib::DeclareSub: non-method form requires a "ptr" or "libref"';
     $ptr = eval { DynaLoader::dl_find_symbol($libref, $name) };
@@ -99,6 +108,7 @@ sub DeclareSub {
       return undef;
     }
   }
+
   $ret_type =~ /^$GoodRet$/o
     or croak "Invalid return type: '$ret_type'";
 
@@ -107,7 +117,7 @@ sub DeclareSub {
     || (defined(&{"$glue_sub_name"}) && \&{"$glue_sub_name"});
 
   if (! $glue_sub) {
-    carp "Unsupported calling convention: \"$convention\""
+    carp "Unsupported calling convention: decl => '$convention'"
       if $^W;
     return undef;
   }
@@ -122,11 +132,14 @@ sub DeclareSub {
     &$glue_sub(@pre_args, map { pack($_, shift) } @arg_type);
   }/;
 
-  sub {
-    carp ($#_ < $#arg_type
-	  ? 'Missing arguments supplied as undef'
-	  : 'Extra arguments ignored')
-      if $#_ != $#arg_type && $^W;
+  return sub {
+    if ($^W) {
+      if ($#_ < $#arg_type) {
+	carp 'Missing arguments supplied as undef';
+      } elsif ($#_ > $#arg_type) {
+	carp 'Extra arguments ignored';
+      }
+    }
     local $SIG{'__WARN__'} = \&my_carp;
     local $SIG{'__DIE__'} = \&my_croak;
     &$proc;
@@ -139,11 +152,8 @@ sub my_carp {
   local $Carp::CarpLevel = 0;
   if ((caller 2)[3] =~ /^\QC::DynaLib::__ANON__/) {
     $Carp::CarpLevel = 2;
-  } else {
-    carp($text);
-    return;
+    $text =~ s/(?: in pack)? at \(eval \d+\) line \d+.*\n//;
   }
-  $text =~ s/(?: in pack)? at \(eval \d+\) line \d+.*\n//;
   carp($text); 
 };
 
@@ -152,10 +162,8 @@ sub my_croak {
   local $Carp::CarpLevel = 0;
   if ((caller 2)[3] =~ /^\QC::DynaLib::__ANON__/) {
     $Carp::CarpLevel = 2;
-  } else {
-    croak($text);
+    $text =~ s/(?: in pack)? at \(eval \d+\) line \d+.*\n//;
   }
-  $text =~ s/(?: in pack)? at \(eval \d+\) line \d+.*\n//;
   croak($text); 
 };
 
@@ -192,8 +200,7 @@ sub new {
     last unless $codeptr;
   }
   if ($index > $#{$Config}) {
-    carp "Limit of ", scalar(@$Config), " callbacks exceeded"
-      if $^W;
+    carp "Limit of ", scalar(@$Config), " callbacks exceeded";
     return undef;
   }
   ($coderef, $ret_type, @arg_type) = @_;
@@ -242,25 +249,18 @@ C::DynaLib - Perl interface to C compiled code.
   $lib = new C::DynaLib( $linker_arg );
 
   $func = $lib->DeclareSub( $symbol_name
-			[, $return_type [, @arg_types] ] );
+			    [, $return_type [, @arg_types] ] );
   # or
   $func = $lib->DeclareSub( { "name"    => $symbol_name,
-			["return" => $return_type,]
-			["args"   => \@arg_types,]
-			["decl"   => $decl,]
-			} );
-  $result = $func->( @args );
-
+			      [param => $value,] ... } );
+  # or
   use C::DynaLib qw(DeclareSub);
   $func = DeclareSub( $function_pointer,
-			[, $return_type [, @arg_types] ] );
+		      [, $return_type [, @arg_types] ] );
   # or
   $func = DeclareSub( { "ptr" => $function_pointer,
-			["return" => $return_type,]
-			["args"   => \@arg_types,]
-			["decl"   => $decl,]
-			["libref" => $libref,]
-			} );
+			[param => $value,] ... } );
+
   $result = $func->( @args );
 
   $callback = new C::DynaLib::Callback( \&my_sub,
@@ -543,11 +543,12 @@ code that stands a chance of being portable.
 In writing glue code (that which allows code written in one language
 to call code in another), an important issue is reliability.  If we
 don't get the convention just right, chances are we will get a core
-dump (protection fault or illegal instruction).  To write really solid
-Perl-to-C glue, we would have to use assembly language and have
-detailed knowledge of each calling convention.  Compiler source code
-can be helpful in this regard, and if your compiler can output
-assembly code, that helps, too.
+dump (protection fault or illegal instruction).
+
+To write really solid Perl-to-C glue, we would have to use assembly
+language and have detailed knowledge of each calling convention.
+Compiler source code can be helpful in this regard, and if your
+compiler can output assembly code, that helps, too.
 
 However, this is Perl, Perl is meant to be ported, and assembly
 language is generally not portable.  This module typically uses C
@@ -573,7 +574,7 @@ C<C::DynaLib> currently supports the parameter-passing conventions
 listed below.  The module can be compiled with support for one or more
 of them by specifying (for example) C<DECL=cdecl> on F<Makefile.PL>'s
 command-line.  If none are given, F<Makefile.PL> will try to choose
-based on your Perl configuration and/or the results of running a test
+based on your perl configuration and/or the results of running a test
 program.
 
 At run time, a calling convention may be specified using a
@@ -582,7 +583,8 @@ may be used.  The first C<DECL=...> supplied to F<Makefile.PL> will be
 the default convention.
 
 Note that the convention must match that of the function in the
-dynamic library, otherwise crashes are likely to occur.
+dynamic library, otherwise crashes or incorrect results are likely to
+occur.
 
 =over 4
 
@@ -704,15 +706,16 @@ and pass the variable in its place, as in
 
 Only a certain number of callbacks can exist at a time.  Callbacks can
 mess up the message produced by C<die> in the presence of nested
-C<eval>s.  The Callback code uses global static data.
+C<eval>s.  The Callback code uses global data, and is consequently not
+thread-safe.
 
 =head2 Miscellaneous Bugs
 
 There are restrictions on what C data types may be used.  Using
 argument types of unusual size may have nasty results.  The techniques
 used to pass values to and from C functions are generally hackish and
-nonstandard.  Assembly code would be more complete.  F<Makefile.PL>
-does too much.  I haven't yet checked for memory leaks.
+nonstandard.  Assembly code would be more complete.  Makefile.PL does
+too much.  I haven't yet checked for memory leaks.
 
 =head1 TODO
 

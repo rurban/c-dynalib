@@ -10,6 +10,9 @@ I32 ax;		/* used by the ST() macro */
 I32 items;
 void *func;
 {
+#ifdef USE_THREADS
+  dTHR;
+#endif
   STRLEN arg_len;
   char *arg_scalar, *arg_on_stack;
   register int i;

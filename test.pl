@@ -34,9 +34,10 @@ sub assert {
   my ($assertion, $got, $expected) = (@_, '', '');
   if ($assertion && $got eq $expected) {
     print "ok $test_num\n";
-  } elsif ($got ne $expected) {
-    print "# expected \"$expected\", got \"$got\"\nnot ok $test_num\n";
   } else {
+    if ($got ne $expected) {
+      print "# expected \"$expected\", got \"$got\"\n";
+    }
     print "not ok $test_num\n";
   }
   ++ $test_num;
@@ -47,7 +48,7 @@ $libc = new C::DynaLib($Config{'libc'} || "-lc");
 
 if (! $libc) {
   if ($^O =~ /win32/i) {
-    $libc = new C::DynaLib("MSVCRT40.DLL");
+    $libc = new C::DynaLib("MSVCRT40") || new C::DynaLib("MSVCRT20");
   } elsif ($^O =~ /linux/i) {
     # Some glibc versions install "libc.so" as a linker script,
     # unintelligible to dlopen().
@@ -122,8 +123,6 @@ sub my_sprintf {
   $buffer =~ s/\0.*//;
   return $buffer;
 }
-
-{} if 0;			# poor old Emacs :(
 
 $fmt = "%x %10sfoo %d %10.7g %f %d %d %d";
 @args = (253, "bar", -789, 2.32578, 3.14, 5, 6, 7);

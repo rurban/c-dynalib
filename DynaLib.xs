@@ -33,39 +33,13 @@ extern "C" {
 /* First i such that ST(i) is a func arg */
 #define DYNALIB_ARGSTART 3
 
-static char *
-constant(name)
-char *name;
-{
-  errno = 0;
-  switch (*name) {
-  case 'D' :
-    if (strEQ(name, "DYNALIB_DEFAULT_CONV")) {
-      return DYNALIB_DEFAULT_CONV;
-    }
-    break;
-  case 'P' :
-    if (strEQ(name, "PTR_TYPE")) {
-      if (sizeof (void *) == sizeof (int))
-	/* XXX Might be nice to make pointers unsigned, but the UV
-	   code in this module is too new. */
-	/* XXX on the other hand, maybe pointers are signed? */
-	return "i";
-#ifdef HAS_QUAD
-      if (sizeof (void *) == sizeof (Quad_t))
-	return "q";
+#ifndef DYNALIB_NUM_CALLBACKS
+#define DYNALIB_NUM_CALLBACKS 0
 #endif
-      if (sizeof (void *) == sizeof (I32))
-	return "l";
-      if (sizeof (void *) == sizeof (I16))
-	return "s";
-      croak("Can't find an integer type that's the same size as pointers");
-    }
-    break;
-  }
-  errno = EINVAL;
-  return 0;
-}
+
+#ifndef DYNALIB_GNU_TRAMPOLINE
+#define DYNALIB_GNU_TRAMPOLINE 0
+#endif
 
 #ifdef DYNALIB_USE_cdecl
 #include "cdecl.c"
@@ -78,10 +52,6 @@ char *name;
 #endif
 #ifdef DYNALIB_USE_hack30
 #include "hack30.c"
-#endif
-
-#ifndef DYNALIB_NUM_CALLBACKS
-#define DYNALIB_NUM_CALLBACKS 0
 #endif
 
 typedef long (*cb_callback) _((void * a, ...));
@@ -346,6 +316,38 @@ va_list ap;
   return result;
 }
 #endif  /* DYNALIB_NUM_CALLBACKS != 0 */
+
+static char *
+constant(name)
+char *name;
+{
+  errno = 0;
+  switch (*name) {
+  case 'D' :
+    if (strEQ(name, "DYNALIB_DEFAULT_CONV")) {
+      return DYNALIB_DEFAULT_CONV;
+    }
+    break;
+  case 'P' :
+    if (strEQ(name, "PTR_TYPE")) {
+      if (sizeof (void *) == sizeof (int))
+	/* XXX Are pointers signed? */
+	return "i";
+#ifdef HAS_QUAD
+      if (sizeof (void *) == sizeof (Quad_t))
+	return "q";
+#endif
+      if (sizeof (void *) == sizeof (I32))
+	return "l";
+      if (sizeof (void *) == sizeof (I16))
+	return "s";
+      croak("Can't find an integer type that's the same size as pointers");
+    }
+    break;
+  }
+  errno = EINVAL;
+  return 0;
+}
 
 
 MODULE = C::DynaLib  PACKAGE = C::DynaLib
