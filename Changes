@@ -57,3 +57,7 @@ a lot of the guts.
 	Renamed as C::DynaLib.  Fixed Makefile.PL bug that resulted
 in NUL chars in DynaLib.c.  Errors in loading libs, finding symbols,
 and allocating callbacks are no longer fatal.
+
+0.52  Sat Oct 18 18:41:42  1997
+	Some efforts toward portability, especially among Sparc
+compilers.

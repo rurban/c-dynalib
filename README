@@ -1,5 +1,5 @@
-This is C::DynaLib, a Perl 5 module for calling C functions in
-dynamic libraries.  Example:
+This is C::DynaLib, a Perl 5 module for calling C functions.
+Example:
 
   use C::DynaLib;
   $libm = new C::DynaLib("-lm");
@@ -14,13 +14,20 @@ dynamic libraries.  Example:
 	***********************************************************
 
 
+	***********************************************************
+	***   A BETTER WAY TO INTERFACE TO C CODE IS WITH XS.   ***
+	***   PLEASE READ THE "perlxs" DOCUMENTATION BEFORE     ***
+	***   MAKING EXTENSIVE USE OF THIS MODULE.              ***
+	***********************************************************
+
+
 The module has been tested successfully on iX86, Sparc, and Alpha
 machines.  However, there are probably compilers for even these chips
 which will require some porting.  If you tell me, I might fix it.
 
 Included are the following packages:
 
-  C::DynaLib            - interface to dynamic libraries
+  C::DynaLib            - call a C function from Perl
   C::DynaLib::Callback  - convert a perl sub into a usable
                                      C function pointer
   C::DynaLib::Struct    - yet another tool for handling C

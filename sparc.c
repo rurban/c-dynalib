@@ -1,6 +1,19 @@
 /* alloca.h is needed with Sun's cc */
 #include <alloca.h>
 
+#ifdef __GNUC__
+/*
+ * We'll take advantage of gcc's inline asm capability.
+ */
+#else  /* ! __GNUC__ */
+static void *
+sparc_where_arg_7(a,b,c,d,e,f,g)
+     int a,b,c,d,e,f,g;
+{
+  return &g;
+}
+#endif  /* ! __GNUC__ */
+
 /*
  * Convert Perl sub args to C args and pass them to (*func)().
  */
@@ -34,9 +47,18 @@ int (*func)();
 	stack_needed += arg_len;
       }
       if (stack_needed > 0) {
-	arg_on_stack = alloca(stack_needed);
-	/* Wish I knew why we have to subtract off 4. */
-	arg_on_stack -= sizeof (int);
+	alloca(stack_needed);
+#ifdef __GNUC__
+	/*
+	 * ??? gcc's alloca seems to always return a pointer that's 4 bytes
+	 * above what we need.  These instructions fix it, if need be.
+	 * Maybe this has something to do with alignment of doubles?
+	 * Still, it's strange that Solaris cc doesn't do the same.
+	 */
+	asm("add %%sp,92,%%o0\n\tst %%o0,%0" : "=m"(arg_on_stack) : );
+#else  /* ! __GNUC__ */
+	arg_on_stack = ((void *(*)())sparc_where_arg_7)();
+#endif  /* ! __GNUC__ */
 	if (check_len > sizeof pseu) {
 	  /* An argument straddles the 6-word line; part goes on stack. */
 	  SvPV(ST(i), arg_len);
@@ -59,4 +81,4 @@ int (*func)();
 }
 
 #define sparc_CALL(func, type)						\
-    ((*((type (*)(I32, I32, void *)) sparc_pray))(ax,items,func))
+    ((*((type (*)()) sparc_pray))(ax,items,func))

@@ -48,4 +48,4 @@ void *func;
 }
 
 #define cdecl_CALL(func, type)						\
-    ((*((type (*)(I32, I32, void *)) cdecl_pray))(ax,items,func))
+    ((*((type (*)()) cdecl_pray))(ax,items,func))

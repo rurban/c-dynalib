@@ -12,7 +12,8 @@ use strict;
 no strict 'refs';
 use Carp;
 use vars qw($VERSION @ISA $AUTOLOAD @EXPORT @EXPORT_OK $DefConv);
-use subs qw(AUTOLOAD new LibRef DeclareSub DYNALIB_DEFAULT_CONV PTR_TYPE);
+use subs qw(AUTOLOAD new LibRef DESTROY
+	    DeclareSub DYNALIB_DEFAULT_CONV PTR_TYPE);
 
 @EXPORT = qw(PTR_TYPE);
 @EXPORT_OK = qw(Poke DeclareSub);
@@ -21,7 +22,7 @@ require DynaLoader;
 require Exporter;
 
 @ISA = qw(DynaLoader Exporter);
-$VERSION = '0.51';
+$VERSION = '0.52';
 bootstrap C::DynaLib $VERSION, \$C::DynaLib::Callback::Config;
 
 
@@ -54,6 +55,12 @@ sub new {
 
 sub LibRef {
     ${$_[0]};
+}
+
+sub DESTROY {
+  if (defined (&DynaLoader::dl_free_file)) {
+    DynaLoader::dl_free_file($_[0]->LibRef);
+  }
 }
 
 sub DeclareSub {

@@ -43,7 +43,7 @@ $libc_arg = $Config{libc} || "-lc";
 $libc = new C::DynaLib($libc_arg);
 
 if (! $libc) {
-  if ($^O =~ /cygwin32/ || $^O eq "MSWin32") {
+  if ($^O =~ /win32/i) {
     $libc = new C::DynaLib("MSVCRT40.DLL")
       || new C::DynaLib("\\WINDOWS\\SYSTEM\\MSVCRT40.DLL");
   } elsif ($^O eq 'linux') {

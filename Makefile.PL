@@ -33,11 +33,12 @@ DynaLib.c: $conv_xs
 $is_dynamic or warn <<STATIC;
 
 *** NOTE
-*** According to Config.pm, this perl does not know how to use dynamic
-*** loading.  The test program for this module will fail, and you will
-*** not be able to invoke functions in dynamic libraries.  If you need
-*** this feature, you have to rebuild perl.  Choose "y" when Configure
-*** asks, "Do you wish to use dynamic loading?".
+*** According to $INC{"Config.pm"},
+*** this perl does not know how to use dynamic loading.  The test
+*** program for this module will fail, and you will not be able to
+*** invoke functions in dynamic libraries.  If you need this feature,
+*** you have to rebuild perl.  Choose "y" when Configure asks, "Do
+*** you wish to use dynamic loading?".
 
 STATIC
 
@@ -56,15 +57,9 @@ for (@ARGV) {
 $archname = $Config{archname};
 unless (@convention) {
     for (
-	 [ '^i[3-9]86.*linux', sub {'cdecl'} ],
-	 [ '^i[3-9]86.*bsd', sub {'cdecl'} ],
+	 [ '^i?[x3-9]86', sub {'cdecl'} ],
 	 [ '^sun4-', sub {'sparc'} ],
 	 [ 'sparc', sub {'sparc'} ],
-	 [ '^cygwin32', sub {
-			$num_callbacks = 0 unless defined ($num_callbacks);
-			'cdecl';
-		    } ],
-	 [ 'MSWin32', sub {'cdecl'} ],
 	 [ 'alpha', sub {
 			unless ($is_gcc) {
 			  $postamble .= "\nalpha-cc\$(OBJ_EXT): alpha-cc.s\n"
@@ -74,9 +69,10 @@ unless (@convention) {
 			  $object .= " alpha-cc.o";
 			}
 			'alpha'} ],
+	 [ 'win32', sub {'cdecl'} ],
 	 [ '', sub { () } ],
 	 )
-    { @convention = &{$_->[1]}, last if $archname =~ /$_->[0]/ }
+    { @convention = &{$_->[1]}, last if $archname =~ /$_->[0]/i }
 }
 
 WriteMakefile(
@@ -256,6 +252,7 @@ $cdecl_h: $0 \$(CONFIGDEP) testcall\$(EXE_EXT)
 	$self->{how_to_run}
 
 testcall\$(EXE_EXT) : testcall.c
+	\$(CC) `\$(PERL) -MExtUtils::Embed -e ccopts` testcall.c -o\$\@
 ";
 }
 
