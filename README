@@ -32,6 +32,8 @@ Included are the following packages:
                                      C function pointer
   C::DynaLib::Struct    - yet another tool for handling C
                                      compound data structures
+  Asm                   - unsupported whimsical i386 CPU interface
+                                     (not installed by default)
 
 To build this module, run the usual
 
@@ -59,11 +61,11 @@ and tell me of your success or failure.
 COPYRIGHT
 
 The files named in MANIFEST, accompanying this file, are Copyright (c)
-1997 by John Tobey.  All rights reserved.  They may be modified,
+1997, 2000 by John Tobey.  All rights reserved.  They may be modified,
 distributed and used under the same conditions as Perl itself.  Of
 course, there is no express or implied warranty.  See the file README
 in the top-level Perl source directory for more information.
 
 Enjoy!
 -John
-jtobey@channel1.com
+jtobey@john-edwin-tobey.org

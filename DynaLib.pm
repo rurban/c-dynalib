@@ -26,7 +26,7 @@ require DynaLoader;
 require Exporter;
 
 @ISA = qw(DynaLoader Exporter);
-$VERSION = '0.54';
+$VERSION = '0.55';
 bootstrap C::DynaLib $VERSION, \$C::DynaLib::Callback::Config;
 
 $GoodRet = '(?:[ilscILSCfdp'.(PTR_TYPE eq 'q'?'qQ':'').']?|P\d+)';
@@ -719,24 +719,24 @@ too much.  I haven't yet checked for memory leaks.
 
 =head1 TODO
 
-Fix the bugs (see above).  Fiddle with autoloading so we don't have to
+Rewrite using GNU ffcall.  Fiddle with autoloading so we don't have to
 call DeclareSub all the time.  Mangle C++ symbol names.  Get Perl to
 understand C header files (macros and function declarations) with
 enough confidence to make them useful here.
 
 =head1 LICENSE
 
-Copyright (c) 1997 by John Tobey.  This package is distributed under
+Copyright (c) 1997, 2000 by John Tobey.  This package is distributed under
 the same license as Perl itself.  There is no expressed or implied
 warranty, since it is free software.  See the file README in the top
 level Perl source directory for details.  The Perl source may be found
-at
+at:
 
   http://www.perl.com/CPAN/src/5.0/
 
 =head1 AUTHOR
 
-John Tobey, jtobey@channel1.com
+John Tobey, jtobey@john-edwin-tobey.org
 
 =head1 SEE ALSO
 

@@ -1,5 +1,9 @@
 =pod
 
+This software is no longer supported on Windows.  Use the Win32::
+modules or write your own XS code instead.  If you would like to
+maintain this module, email the author.
+
 This file is a Perl program that tests the C::DynaLib package
 on Windows 95.  It might work on iX86 NT, but I wouldn't place bets
 beyond that.  To run it after installation, type `perl <this-file>'.
@@ -15,12 +19,6 @@ lacks an important feature of C, namely the preprocessor (unless
 someone has written a Cpp module that I don't know about?)  Therefore,
 all function declarations and constants from <windows.h> are
 hard-coded.
-
-This is not a happy state of affairs for would-be Perl Windows
-programmers.  Someday maybe there will be a fancy AutoLoading module
-that reads C header files and lets us use preprocessor macros.  For
-now though, if you want to make direct API calls without writing
-specialized XS code, this is the best way I know how.
 
 Another difficulty is the use of resources.  Windows resources are
 binary data associated with an application; for example, menus,
