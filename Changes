@@ -61,3 +61,8 @@ and allocating callbacks are no longer fatal.
 0.52  Sat Oct 18 18:41:42  1997
 	Some efforts toward portability, especially among Sparc
 compilers.
+
+0.53  Sat Oct 25 12:47:32  1997
+	Improved error checking and reporting.  Function calls occur
+in the sub declarer's package.  Second arg to C::DynaLib->new will be
+passed along to DynaLoader::dl_load_file.

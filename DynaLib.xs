@@ -31,7 +31,7 @@ extern "C" {
 #endif
 
 /* First i such that ST(i) is a func arg */
-#define DYNALIB_ARGSTART 2
+#define DYNALIB_ARGSTART 3
 
 static char *
 constant(name)
@@ -59,7 +59,7 @@ char *name;
 	return "l";
       if (sizeof (void *) == sizeof (I16))
 	return "s";
-      croak("Can't find an integer type that's the same size as pointers.");
+      croak("Can't find an integer type that's the same size as pointers");
     }
     break;
   }

@@ -421,9 +421,9 @@ ${convention}_call_packed(symref, ret_type, ...)
 		      atoi(&ret_type[1]));
 	    break;
 	  default :
-	    croak("unsupported function return type: '%c'", *ret_type);
+	    croak("Unsupported function return type: '%c'", *ret_type);
 	  }
-	  ST(0) = sv;
+	  XPUSHs(sv);
 	  XSRETURN(1);
 	}
 XS

@@ -11,9 +11,14 @@ require 5.002;
 use strict;
 no strict 'refs';
 use Carp;
-use vars qw($VERSION @ISA $AUTOLOAD @EXPORT @EXPORT_OK $DefConv);
-use subs qw(AUTOLOAD new LibRef DESTROY
-	    DeclareSub DYNALIB_DEFAULT_CONV PTR_TYPE);
+use vars qw($VERSION @ISA $AUTOLOAD @EXPORT @EXPORT_OK);
+use vars qw($GoodRet $DefConv);
+use subs qw(AUTOLOAD new LibRef DESTROY DeclareSub);
+
+
+# inline-able constants
+sub DYNALIB_DEFAULT_CONV ();
+sub PTR_TYPE ();
 
 @EXPORT = qw(PTR_TYPE);
 @EXPORT_OK = qw(Poke DeclareSub);
@@ -22,151 +27,203 @@ require DynaLoader;
 require Exporter;
 
 @ISA = qw(DynaLoader Exporter);
-$VERSION = '0.52';
+$VERSION = '0.53';
 bootstrap C::DynaLib $VERSION, \$C::DynaLib::Callback::Config;
 
+$GoodRet = '(?:[ilscILSCfdp'.(PTR_TYPE eq 'q'?'qQ':'').']?|P\d+)';
 
 sub AUTOLOAD {
   my $constname;
   ($constname = $AUTOLOAD) =~ s/.*:://;
   my $val = constant($constname);
   $! and croak "Undefined subroutine &$AUTOLOAD called";
-  eval "sub $AUTOLOAD { '$val' }";
+  eval "sub $AUTOLOAD () { '$val' }";
   goto &$AUTOLOAD;
 }
 
 $DefConv = DYNALIB_DEFAULT_CONV;
 
-# Cache of loaded lib refs.  Maybe best left to DynaLoader?
-my %loaded_libs = ();
-
 sub new {
-    my $class = shift;
-    scalar(@_) == 1
-	or croak 'Usage: $lib = new C::DynaLib "-lc" (for example)';
-    my ($libname) = @_;
-    return $loaded_libs{$libname} if exists($loaded_libs{$libname});
-    my $so = $libname;
-    -e $so or $so = DynaLoader::dl_findfile($libname) || $libname;
-    my $lib = DynaLoader::dl_load_file($so)
-	or return undef;
-    return $loaded_libs{$libname} = bless \$lib, $class;
+  my $class = shift;
+  my $libname = shift;
+  scalar(@_) <= 1
+    or croak 'Usage: $lib = new C::DynaLib( $filename [, $flags] )';
+  my $so = $libname;
+  -e $so or $so = DynaLoader::dl_findfile($libname) || $libname;
+  my $lib = DynaLoader::dl_load_file($so, @_)
+    or return undef;
+  bless \$lib, $class;
 }
 
 sub LibRef {
-    ${$_[0]};
+  ${$_[0]};
 }
 
 sub DESTROY {
-  if (defined (&DynaLoader::dl_free_file)) {
-    DynaLoader::dl_free_file($_[0]->LibRef);
-  }
+  DynaLoader::dl_free_file($_[0]->LibRef)
+    if defined (&DynaLoader::dl_free_file);
 }
 
 sub DeclareSub {
-    local ($@);  # We eval $obj->isa and $obj->can for 5.003 compatibility.
-    my $self = shift;
+  local ($@);	# We eval $obj->isa and $obj->can for 5.003 compatibility.
+  my $self = shift;
 
-    # Calling as a method is equivalent to supplying the "libref"
-    # named arg.
-    my $is_method;
-    $is_method = ref($self) && eval { $self->isa("C::DynaLib") };
-    $@ and $is_method = (ref($self) eq 'C::DynaLib');
-    my $first = ($is_method ? shift : $self);
+  # Calling as a method is equivalent to supplying the "libref" named arg.
+  my $is_method;
+  $is_method = ref($self) && eval { $self->isa("C::DynaLib") };
+  $@ and $is_method = (ref($self) eq 'C::DynaLib');
+  my $first = ($is_method ? shift : $self);
 
-    my ($libref, $name, $ptr, $convention, $ret_type, @arg_type);
-    if (ref($first) eq 'HASH') {
-	# Using named parameters.
-	! @_ && (($ptr = $first->{ptr}) || defined($name = $first->{name}))
-	    or croak 'Usage: $lib->DeclareSub({ "name" => $func_name [, "return" => $ret_type] [, "args" => \@arg_types] [, "decl" => $decl] })';
-	$convention = $first->{decl} || $DefConv;
-	$ret_type = $first->{'return'} || '';
-	@arg_type = @{ $first->{args} || [] };
-	$libref = $first->{'libref'};
-    } else {
-	# Using positional parameters.
-	($is_method ? $name : $ptr) = $first
-	    or croak 'Usage: $lib->DeclareSub( $func_name [, $return_type [, \@arg_types]] )';
-	$convention = $DefConv;
-	$ret_type = shift || '';
-	@arg_type = @_;
-    }
-    unless ($ptr) {
-	$libref ||= $is_method && $self->LibRef()
-	    or croak 'C::DynaLib::DeclareSub: non-method form requires a "ptr" or "libref"';
-	$ptr = eval { DynaLoader::dl_find_symbol($libref, $name) };
-	if ($@ || ! $ptr) {
-	  warn "Can't find symbol \"$name\": ", $@ || DynaLoader::dl_error()
-	    if $^W;
-	  return undef;
-	}
-    }
-
-    my $glue_sub_name = $convention . '_call_packed';
-
-    my $glue_sub = ($is_method && eval { $self->can($glue_sub_name) })
-	|| (defined(&{"$glue_sub_name"}) && \&{"$glue_sub_name"});
-    if (! $glue_sub) {
-      warn "Unsupported calling convention: \"$convention\""
-	if $^W;
+  my ($libref, $name, $ptr, $convention, $ret_type, @arg_type);
+  if (ref($first) eq 'HASH') {
+    # Using named parameters.
+    ! @_ && (($ptr = $first->{ptr}) || defined ($name = $first->{name}))
+      or croak 'Usage: $lib->DeclareSub({ "name" => $func_name [, "return" => $ret_type] [, "args" => \@arg_types] [, "decl" => $decl] })';
+    $convention = $first->{decl} || $DefConv;
+    $ret_type = $first->{'return'} || '';
+    @arg_type = @{ $first->{args} || [] };
+    $libref = $first->{'libref'};
+  } else {
+    # Using positional parameters.
+    ($is_method ? $name : $ptr) = $first
+      or croak 'Usage: $lib->DeclareSub( $func_name [, $return_type [, \@arg_types]] )';
+    $convention = $DefConv;
+    $ret_type = shift || '';
+    @arg_type = @_;
+  }
+  unless ($ptr) {
+    $libref ||= $is_method && $self->LibRef()
+      or croak 'C::DynaLib::DeclareSub: non-method form requires a "ptr" or "libref"';
+    $ptr = eval { DynaLoader::dl_find_symbol($libref, $name) };
+    if ($@ || ! $ptr) {
       return undef;
     }
+  }
+  $ret_type =~ /^$GoodRet$/o
+    or croak "Invalid return type: '$ret_type'";
 
-    return sub {
-	&{$glue_sub}($ptr, $ret_type, map { pack($_, shift) } @arg_type);
-    };
+  my $glue_sub_name = $convention . '_call_packed';
+  my $glue_sub = ($is_method && eval { $self->can($glue_sub_name) })
+    || (defined(&{"$glue_sub_name"}) && \&{"$glue_sub_name"});
+
+  if (! $glue_sub) {
+    carp "Unsupported calling convention: \"$convention\""
+      if $^W;
+    return undef;
+  }
+
+  my @pre_args = ($ptr, $ret_type, $libref);
+  my $pkg = caller();
+
+  # This 'inner' closure must be an eval-string in order to compile the
+  # function call in our caller's package.
+  my $proc = eval q/ sub {
+    package /.$pkg.q/;
+    &$glue_sub(@pre_args, map { pack($_, shift) } @arg_type);
+  }/;
+
+  sub {
+    carp ($#_ < $#arg_type
+	  ? 'Missing arguments supplied as undef'
+	  : 'Extra arguments ignored')
+      if $#_ != $#arg_type && $^W;
+    local $SIG{'__WARN__'} = \&my_carp;
+    local $SIG{'__DIE__'} = \&my_croak;
+    &$proc;
+  };
 }
+
+sub my_carp {
+  # inspired by Exporter
+  my $text = shift;
+  local $Carp::CarpLevel = 0;
+  if ((caller 2)[3] =~ /^\QC::DynaLib::__ANON__/) {
+    $Carp::CarpLevel = 2;
+  } else {
+    carp($text);
+    return;
+  }
+  $text =~ s/(?: in pack)? at \(eval \d+\) line \d+.*\n//;
+  carp($text); 
+};
+
+sub my_croak {
+  my $text = shift;
+  local $Carp::CarpLevel = 0;
+  if ((caller 2)[3] =~ /^\QC::DynaLib::__ANON__/) {
+    $Carp::CarpLevel = 2;
+  } else {
+    croak($text);
+  }
+  $text =~ s/(?: in pack)? at \(eval \d+\) line \d+.*\n//;
+  croak($text); 
+};
+
 
 package C::DynaLib::Callback;
 
 use strict;
 use Carp;
-use vars qw($Config $CONFIG_TEMPLATE $empty);
+use vars qw($Config $GoodRet $GoodFirst $GoodArg $empty);
 use subs qw(new Ptr DESTROY);
 
-$CONFIG_TEMPLATE =
-  C::DynaLib::PTR_TYPE . "pp" . C::DynaLib::PTR_TYPE;
+sub CONFIG_TEMPLATE () { C::DynaLib::PTR_TYPE ."pp". C::DynaLib::PTR_TYPE }
 $empty = "";
 
+if (C::DynaLib::PTR_TYPE eq 'q') {
+  $GoodRet = '[iIq]?';
+  $GoodFirst = '(?:[ilscILSCpqQ]?|P\d+)';
+  $GoodArg = '(?:[ilscILSCfdpqQ]?|P\d+)';
+} else {
+  $GoodRet = '[iI]?';
+  $GoodFirst = '(?:[ilscILSCp]?|P\d+)';
+  $GoodArg = '(?:[ilscILSCfdp]?|P\d+)';
+}
+
 sub new {
-    my $class = shift;
-    my $self = [];
-    my ($index, $coderef);
-    my ($codeptr, $ret_type, $arg_type, @arg_type, $func);
-    for ($index = 0; $index <= $#{$Config}; $index++) {
-	($codeptr, $ret_type, $arg_type, $func)
-	    = unpack($CONFIG_TEMPLATE, $Config->[$index]);
-	last unless $codeptr;
-    }
-    if ($index > $#{$Config}) {
-      warn "Limit of ", scalar(@$Config), " callbacks exceeded"
-	if ($^W);
-      return undef;
-    }
-    ($coderef, $ret_type, @arg_type) = @_;
-    unshift @$self, $coderef;
-    if (ref($coderef) eq 'CODE') {
-	"$coderef" =~ /\(0x([\da-f]+)\)/;
-	$codeptr = hex($1);
-    } else {
-	\$self->[0] =~ /\(0x([\da-f]+)\)/;
-	$codeptr = hex($1);
-    }
-    $arg_type = join('', @arg_type);
-    unshift @$self, $codeptr, $ret_type, $arg_type, $func, $index;
-    $Config->[$index] = pack($CONFIG_TEMPLATE, @$self);
-    return bless $self, $class;
+  my $class = shift;
+  my $self = [];
+  my ($index, $coderef);
+  my ($codeptr, $ret_type, $arg_type, @arg_type, $func);
+  my $i;
+  for ($index = 0; $index <= $#{$Config}; $index++) {
+    ($codeptr, $ret_type, $arg_type, $func)
+      = unpack(CONFIG_TEMPLATE, $Config->[$index]);
+    last unless $codeptr;
+  }
+  if ($index > $#{$Config}) {
+    carp "Limit of ", scalar(@$Config), " callbacks exceeded"
+      if $^W;
+    return undef;
+  }
+  ($coderef, $ret_type, @arg_type) = @_;
+
+  $ret_type =~ /^$GoodRet$/o
+    or croak "Invalid callback return type: '$ret_type'";
+  ! @arg_type || $arg_type[0] =~ /^$GoodFirst$/o
+    or croak "Invalid callback first argument type: '$arg_type[0]'";
+  for $i (@arg_type[1..$#arg_type]) {
+    $i =~ /^$GoodArg$/o
+      or croak "Invalid callback argument type: '$i'";
+  }
+
+  unshift @$self, $coderef;
+  $codeptr = \$self->[0] + 0;
+  $arg_type = join ('', @arg_type);
+
+  unshift @$self, $codeptr, $ret_type, $arg_type, $func, $index;
+  $Config->[$index] = pack (CONFIG_TEMPLATE, @$self);
+
+  bless $self, $class;
 }
 
 sub Ptr {
-    $_[0]->[3];
+  $_[0]->[3];
 }
 
 sub DESTROY {
-    my $self = shift;
-    my ($codeptr, $ret_type, $arg_type, $func, $index)
-	= @$self;
-    $Config->[$index] = pack($CONFIG_TEMPLATE, 0, $empty, $empty, $func);
+  $Config->[$_[0]->[4]] = pack(CONFIG_TEMPLATE, 0, $empty, $empty,
+			       $_[0]->[3]);
 }
 
 package C::DynaLib;
@@ -175,8 +232,7 @@ __END__
 
 =head1 NAME
 
-C::DynaLib - Perl extension for calling dynamically loaded C
-functions
+C::DynaLib - Perl interface to C compiled code.
 
 =head1 SYNOPSIS
 
@@ -214,19 +270,19 @@ functions
 =head1 PLUG FOR PERL XS
 
 If you have a C compiler that Perl supports, you will get better
-results by writing XSubs than by using this module.  I guarantee it.
-It may take you longer to do what you want, but your code will be much
-more solid and portable.  See L<perlxs>.
+results by writing XSubs than by using this module.  B<I GUARANTEE
+IT!>  It may take you longer to do what you want, but your code will
+be much more solid and portable.  See L<perlxs>.
 
 This module brings "pointers" to Perl.  Perl's non-use of pointers is
 one of its great strengths.  If you don't know what I mean, then maybe
 you ought to practice up a bit on C or C++ before using this module.
 If anything, pointers are more dangerous in Perl than in C, due to
-Perl's dynamic nature.
+Perl's dynamic, interpretive nature.
 
 The XSub interface and Perl objects provide a means of calling C and
 C++ code while preserving Perl's abstraction from pointers.  Once
-again, I urge you to check out L<perlxs>!  It's really cool!!!
+again, I I<urge> you to check out L<perlxs>!  It's really cool!!!
 
 =head1 DESCRIPTION
 
@@ -309,7 +365,9 @@ specified in the method forms.
 
 The return type of the function, encoded for use with the C<pack>
 operator.  Not all of the C<pack> codes are supported, but the
-unsupported ones mostly don't make sense as C return types.
+unsupported ones mostly don't make sense as C return types.  Functions
+that return a C<struct> are not supported.  However, a I<pointer> to
+struct is okay.
 
 Many C functions return pointers to various things.  If you have a
 function that returns C<S<char *>> and all you're interested in is the
@@ -319,7 +377,8 @@ by a number of bytes) is also permissible.
 
 For the case where a returned pointer value must be remembered (for
 example, I<malloc()>), use C<PTR_TYPE>.  The returned scalar will be
-the pointer itself, not the thing pointed to.
+the pointer itself.  You can use C<unpack> to find the thing pointed
+to.
 
 =item C<args>
 
@@ -336,6 +395,9 @@ may or may not perform such conversions.  Use C<"i"> instead.
 Likewise, use C<"I"> in place of C<"C"> or C<"S">, and C<"d"> in place
 of C<"f">.  Stick with C<"i">, C<"I">, C<"d">, C<"p">, C<"P">, and
 C<PTR_TYPE> if you want to be safe.
+
+Passing structs by value is not generally supported, but you might
+find a way to do it with a given compiler by experimenting.
 
 =item C<decl>
 
@@ -386,7 +448,7 @@ object of class C<C::DynaLib::Callback>.  The syntax is
 
 where C<$ret_type> and C<@arg_types> are the C<pack>-style types of
 the function return value and arguments, respectively.  C<\&some_sub>
-must be a code reference (see L<perlref>).
+must be a code reference or sub name (see L<perlref>).
 
 C<$cb_ref-E<gt>Ptr()> then returns a function pointer.  C code that
 calls it will end up calling C<&some_sub>.
@@ -420,7 +482,7 @@ callbacks.
 
 =head1 CALLING CONVENTIONS
 
-This section is intended for anyone who's interested in debugging or
+This section is intended for anyone who is interested in debugging or
 extending this module.  You probably don't need to read it just to
 I<use> the module.
 
@@ -490,8 +552,7 @@ assembly code, that helps, too.
 However, this is Perl, Perl is meant to be ported, and assembly
 language is generally not portable.  This module typically uses C
 constructs that happen to work most of the time, as opposed to
-assembly code that follows the conventions faithfully.  I expect the
-use of assembly language to increase, however.
+assembly code that follows the conventions faithfully.
 
 By avoiding the use of assembly, we lose some reliability and
 flexibility.  By loss of reliability, I mean we can expect crashes,
@@ -499,9 +560,9 @@ especially on untested platforms.  Lost flexibility means having
 restrictions on what parameter types and return types are allowed.
 
 The code for all conventions other than C<hack30> (described below)
-relies on the C I<alloca()> function.  Unfortunately, I<alloca()>
+relies on C's I<alloca()> function.  Unfortunately, I<alloca()>
 itself is not standard, so its use introduces new portability
-concerns.  For C<cdecl>, the most general convention, F<Makefile.PL>
+concerns.  For C<cdecl> (the most general convention) F<Makefile.PL>
 creates and runs a test program to try to ferret out any compiler
 peculiarities regarding I<alloca()>.  If the test program fails, the
 default choice becomes C<hack30>.
@@ -529,23 +590,23 @@ dynamic library, otherwise crashes are likely to occur.
 
 All arguments are placed on the stack in reverse order from how the
 function is invoked.  This seems to be the default for Intel-based
-machines and possibly others.
+machines and some others.
 
 =item C<sparc>
 
-The first 6 machine words of arguments are cast to an array of six
-C<int>s.  The remaining args (and possibly piece of an arg) are placed
-on the stack.  Then the C function is called as if it expected six
-integer arguments.  On a Sparc, the six "pseudo-arguments" are passed
-in special registers.
+The first 24 bytes of arguments are cast to an array of six C<int>s.
+The remaining args (and possibly piece of an arg) are placed on the
+stack.  Then the C function is called as if it expected six integer
+arguments.  On a Sparc, the six "pseudo-arguments" are passed in
+special registers.
 
 =item C<alpha>
 
 This is similar to the C<sparc> convention, but the pseudo-arguments
 have type C<long> instead of C<int>, and all arguments are extended to
-8 bytes before being placed in the array.  On the Alpha, a special
-sequence of inline assembly instructions is used to ensure that any
-function parameters of type C<double> are passed correctly.
+eight bytes before being placed in the array.  On the AXP, a special
+sequence of assembly instructions is used to ensure that any function
+parameters of type C<double> are passed correctly.
 
 =item C<hack30>
 
@@ -580,9 +641,10 @@ not known at compile time.
 
 Although some effort is made in F<Makefile.PL> to find out how
 parameters are passed in C, this applies only to the integer type
-(Perl's C<I32>, to be precise; see L<perlguts(1)>).  Functions that
-recieve or return type C<double>, for example, may not work on systems
-that use floating-point registers for this purpose.
+(Perl's C<I32>, to be precise).  Functions that recieve or return type
+C<double>, for example, may not work on systems that use
+floating-point registers for this purpose.  Specialized code may be
+required to support such systems.
 
 =head2 Robustness
 
@@ -595,7 +657,7 @@ if the C or XS code is faulty.  However, once the XS module has been
 sufficiently debugged, one can be reasonably sure that it will work
 right.
 
-C code called through this module lacks such protection.  Since the
+Code called through this module lacks such protection.  Since the
 association between Perl and C is made at run time, errors due to
 incompatible library interfaces or incorrect assumptions have a much
 greater chance of causing a crash than with either straight Perl or XS
@@ -603,11 +665,16 @@ code.
 
 =head2 Security
 
-This module does not require special privileges to run, and I have no
-reason to think it contains any security bugs.  However, when it is
-installed, Perl programs gain great power to invoke C code which could
-potentially have such bugs.  I'm not really sure whether this is a
-major issue or not.
+This module does not require special privileges to run.  I have no
+reason to think it contains any security bugs (except to the extent
+that the known bugs impact security).  However, when this module is
+installed, Perl programs gain great power to exploit C code which
+could potentially have such bugs.  I'm not really sure whether this is
+a major issue or not.
+
+I haven't gotten around to understanding Perl's internal tainting
+interface, so taint-checking may not accomplish what you expect.  (See
+L<perlsec>)
 
 =head2 Deallocation of Resources
 
@@ -616,7 +683,7 @@ to dynamic library linking.  F<DynaLoader>'s main purpose is to
 support XS modules, which are loaded once by a program and not (to my
 knowledge) unloaded.  It would be nice to be able to free the
 libraries loaded by this module when they are no longer needed.  This
-is impossible, since F<DynaLoader> currently provides no means to do
+will be impossible, as long as F<DynaLoader> provides no means to do
 so.
 
 =head2 Literal and temporary strings
@@ -635,17 +702,17 @@ and pass the variable in its place, as in
 
 =head2 Callbacks
 
-Callbacks can mess up the message produced by C<die> in the presence
-of nested C<eval>s.  The Callback code uses global static data.
+Only a certain number of callbacks can exist at a time.  Callbacks can
+mess up the message produced by C<die> in the presence of nested
+C<eval>s.  The Callback code uses global static data.
 
 =head2 Miscellaneous Bugs
 
-There is not enough error checking.  Errors are often reported as
-being in F<DynaLib.pm> when they're really in the caller's code.
-There are too many restrictions on what C data types may be used.
-Using argument types of unusual size may have nasty results.  The
-techniques used to pass values to and from C functions are all rather
-hackish and nonstandard.  Assembly code would be more complete.
+There are restrictions on what C data types may be used.  Using
+argument types of unusual size may have nasty results.  The techniques
+used to pass values to and from C functions are generally hackish and
+nonstandard.  Assembly code would be more complete.  F<Makefile.PL>
+does too much.  I haven't yet checked for memory leaks.
 
 =head1 TODO
 
@@ -662,7 +729,7 @@ warranty, since it is free software.  See the file README in the top
 level Perl source directory for details.  The Perl source may be found
 at
 
-  http://www.perl.com/CPAN/src/
+  http://www.perl.com/CPAN/src/5.0/
 
 =head1 AUTHOR
 
@@ -671,6 +738,6 @@ John Tobey, jtobey@channel1.com
 =head1 SEE ALSO
 
 L<perl(1)>, L<perlfunc(1)> (for C<pack>), L<perlref(1)>,
-L<DynaLoader(3)>, L<perlxs(1)>, L<perlcall(1)>.
+L<sigtrap(3)>, L<DynaLoader(3)>, L<perlxs(1)>, L<perlcall(1)>.
 
 =cut
