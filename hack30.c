@@ -59,5 +59,10 @@ void *func;
      pseu[24], pseu[25], pseu[26], pseu[27], pseu[28], pseu[29]);
 }
 
+#if defined(__GNUC__) && __GNUC__ >= 3 && defined(__GNUC_MINOR__) && (__GNUC_MINOR__ >= 3)
+#define hack30_CALL(func, type)						\
+    ((*((int (*)()) hack30_pray))(ax,items,func))
+#else
 #define hack30_CALL(func, type)						\
     ((*((type (*)()) hack30_pray))(ax,items,func))
+#endif

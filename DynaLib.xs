@@ -114,12 +114,12 @@ cb_call_sub(index, first, ap)
 	    break;
 	case 'I' :
 	    sv = newSV(0);
-	    sv_setuv(sv, (UV) first);
+	    sv_setuv(sv, PTR2UV(first));
 	    XPUSHs(sv_2mortal(sv));
 	    break;
 	case 'L' :
 	    sv = newSV(0);
-	    sv_setuv(sv, (U32) first);
+	    sv_setuv(sv, PTR2UV(first));
 	    XPUSHs(sv_2mortal(sv));
 	    break;
 	case 'S' :
@@ -131,14 +131,14 @@ cb_call_sub(index, first, ap)
 #ifdef HAS_QUAD
 	case 'q' :
 	    if (sizeof (Quad_t) <= sizeof first)
-		XPUSHs(sv_2mortal(newSViv((IV) (Quad_t) first)));
+		XPUSHs(sv_2mortal(newSViv(PTR2IV((Quad_t) first))));
 	    else
 		croak(first_msg, *arg_type);
 	    break;
 	case 'Q' :
 	    if (sizeof (unsigned Quad_t) <= sizeof first) {
 		sv = newSV(0);
-		sv_setuv(sv, (UV) (unsigned Quad_t) first);
+		sv_setuv(sv, PTR2UV((unsigned Quad_t) first));
 		XPUSHs(sv_2mortal(sv));
 	    }
 	    else
@@ -167,10 +167,10 @@ cb_call_sub(index, first, ap)
 		XPUSHs(sv_2mortal(newSViv((IV) va_arg(ap, I32))));
 		break;
 	    case 's' :
-		XPUSHs(sv_2mortal(newSViv((IV) va_arg(ap, I16))));
+		XPUSHs(sv_2mortal(newSViv((IV) va_arg(ap, int))));
 		break;
 	    case 'c' :
-		XPUSHs(sv_2mortal(newSViv((IV) va_arg(ap, char))));
+		XPUSHs(sv_2mortal(newSViv((IV) va_arg(ap, int))));
 		break;
 	    case 'I' :
 		sv = newSV(0);
@@ -183,10 +183,10 @@ cb_call_sub(index, first, ap)
 		XPUSHs(sv_2mortal(sv));
 		break;
 	    case 'S' :
-		XPUSHs(sv_2mortal(newSViv((IV) va_arg(ap, U16))));
+		XPUSHs(sv_2mortal(newSViv((IV) va_arg(ap, int))));
 		break;
 	    case 'C' :
-		XPUSHs(sv_2mortal(newSViv((IV) va_arg(ap, unsigned char))));
+		XPUSHs(sv_2mortal(newSViv((IV) va_arg(ap, int))));
 		break;
 #ifdef HAS_QUAD
 	    case 'q' :
@@ -209,7 +209,7 @@ cb_call_sub(index, first, ap)
 		break;
 #endif
 	    case 'f' :
-		XPUSHs(sv_2mortal(newSVnv((double) va_arg(ap, float))));
+		XPUSHs(sv_2mortal(newSVnv((double) va_arg(ap, double))));
 		break;
 	    case 'd' :
 		XPUSHs(sv_2mortal(newSVnv(va_arg(ap, double))));

@@ -11,9 +11,13 @@ alpha-cc.s
 cdecl.c
 hack30.c
 sparc.c
-test.pl
 testcall.c
-DynaLib/Makefile.PL
-DynaLib/Struct.pm
-DynaLib/test.pl
+lib/C/DynaLib/Makefile.PL
+lib/C/DynaLib/Struct.pm
 Asm-0.01.tar.gz
+script/pl2exe.pl
+t/01test.t
+t/02struct.t
+t/03win32.t
+t/09distribution.t
+META.yml                                 Module meta-data (added by MakeMaker)

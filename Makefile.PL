@@ -7,8 +7,9 @@ use Config;
 my($archname, @convention, $convention,
    $num_callbacks, %cflags, $object,
    $conv_xs, $cbfunc_c, $cdecl_h, $postamble,
-   $is_gcc, $is_borland, $is_dynamic);
+   $is_gcc, $is_borland, $is_dynamic, $Verbose);
 
+$Verbose = 1;
 $conv_xs = "conv.xsi";
 $cbfunc_c = "cbfunc.c";
 $cdecl_h = "cdecl.h";
@@ -71,6 +72,7 @@ unless (@convention) {
 			}
 			'alpha'} ],
 	 [ 'win32', sub {'cdecl'} ],
+#	 [ '^cygwin-thread-multi-64int', sub {'hack30'} ],
 	 [ '', sub { () } ],
 	 )
     { @convention = &{$_->[1]}, last if $archname =~ /$_->[0]/i }
@@ -87,6 +89,15 @@ WriteMakefile(
     'H'         => [],
     'C'         => ['DynaLib.c'],
     'INC'	=> '-I.',
+    'OPTIMIZE'	=> $is_gcc ? '-O0' : '/Od',
+
+    'PREREQ_PM' => {
+        'Test' => 0,
+        'Test::More' => 0,
+    },
+    ($] >= 5.005 ?
+     ('AUTHOR' => 'Reini Urban <rurban@cpan.org>',
+      'ABSTRACT_FROM' => 'DynaLib.pm') : ()),
 );
 
 
@@ -159,9 +170,9 @@ PROG
     return &$cant unless $self->{how_to_compile};
 
     @candidate = ();
-    push @candidate, "testtest$self->{EXE_EXT} >/dev/null 2>&1"
-	unless $Verbose;
     push @candidate, "./testtest$self->{EXE_EXT} >/dev/null 2>&1"
+	unless $Verbose;
+    push @candidate, "testtest$self->{EXE_EXT} >/dev/null 2>&1"
 	unless $Verbose;
     push @candidate, "testtest$self->{EXE_EXT}";
     push @candidate, "./testtest$self->{EXE_EXT}";
@@ -261,7 +272,7 @@ sub MY::postamble {
 
     print "Using calling convention(s): @convention\n"
 	if $Verbose;
-    for (@convention) { $cflags{"-DDYNALIB_USE_$_"} = undef }
+    for (@convention) { $cflags{"-DDYNALIB_USE_$_"} = undef; }
 
     print "Default calling convention: $convention[0]\n"
 	if $Verbose;
@@ -407,7 +418,7 @@ ${convention}_call_packed(symref, ret_type, ...)
 	    break;
 #endif
 	  case 'f' :
-	    sv_setnv(sv, (double) ${convention}_CALL(symref, float));
+            sv_setnv(sv, (double) ${convention}_CALL(symref, float));
 	    break;
 	  case 'd' :
 	    sv_setnv(sv, ${convention}_CALL(symref, double));

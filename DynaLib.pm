@@ -8,12 +8,13 @@ package C::DynaLib;
 require 5.002;
 
 use strict;
+use warnings;
 no strict 'refs';
 use Carp;
 use vars qw($VERSION @ISA $AUTOLOAD @EXPORT @EXPORT_OK);
 use vars qw($GoodRet $DefConv);
 use subs qw(AUTOLOAD new LibRef DESTROY DeclareSub);
-
+our $VERSION = '0.56';
 
 # inline-able constants?
 sub DYNALIB_DEFAULT_CONV ();
@@ -26,7 +27,7 @@ require DynaLoader;
 require Exporter;
 
 @ISA = qw(DynaLoader Exporter);
-$VERSION = '0.55';
+
 bootstrap C::DynaLib $VERSION, \$C::DynaLib::Callback::Config;
 
 $GoodRet = '(?:[ilscILSCfdp'.(PTR_TYPE eq 'q'?'qQ':'').']?|P\d+)';
@@ -309,7 +310,7 @@ A C<C::DynaLib> object corresponds to a dynamic library whose
 functions are available to Perl.  A C<C::DynaLib::Callback> object
 corresponds to a Perl sub which may be accessed from C.
 
-=head2 C<C::DynaLib> public constructor
+=head2 C<new C::DynaLib> public constructor
 
 The argument to C<new> may be the file name of a dynamic library.
 Alternatively, a linker command-line argument (e.g., C<"-lc">) may be
@@ -319,7 +320,7 @@ mapped to file names.
 On failure, C<new> returns C<undef>.  Error information I<might> be
 obtainable by calling C<DynaLoader::dl_error()>.
 
-=head2 Declaring a library routine
+=head2 DeclareSub( {} | ... ) - Declaring a library routine
 
 Before you can call a function in a dynamic library, you must specify
 its name, the return type, and the number and types of arguments it
@@ -405,7 +406,7 @@ Allows you to specify a function's calling convention.  This is
 possible only with a named-parameter form of C<DeclareSub>.  See below
 for information about the supported calling conventions.
 
-=item C<libref>
+=item ->LibRef()
 
 A library reference obtained from either C<DynaLoader::dl_load_file>
 or the C<C::DynaLib::LibRef> method.  You must use a named-parameter
@@ -419,7 +420,7 @@ The returned value of C<DeclareSub> is a code reference.  Calling
 through it results in a call to the C function.  See L<perlref(1)> on
 how to use code references.
 
-=head2 Using callback routines
+=head2 C::DynaLib::Callback( \&some_sub, $ret_type, @arg_types ) - Using callback routines
 
 Some C functions expect a pointer to another C function as an
 argument.  The library code that receives the pointer may use it to
@@ -591,14 +592,14 @@ occur.
 =item C<cdecl>
 
 All arguments are placed on the stack in reverse order from how the
-function is invoked.  This seems to be the default for Intel-based
+function is invoked. This seems to be the default for Intel-based
 machines and some others.
 
 =item C<sparc>
 
 The first 24 bytes of arguments are cast to an array of six C<int>s.
 The remaining args (and possibly piece of an arg) are placed on the
-stack.  Then the C function is called as if it expected six integer
+stack. Then the C function is called as if it expected six integer
 arguments.  On a Sparc, the six "pseudo-arguments" are passed in
 special registers.
 
@@ -719,28 +720,37 @@ too much.  I haven't yet checked for memory leaks.
 
 =head1 TODO
 
-Rewrite using GNU ffcall.  Fiddle with autoloading so we don't have to
-call DeclareSub all the time.  Mangle C++ symbol names.  Get Perl to
-understand C header files (macros and function declarations) with
-enough confidence to make them useful here.
+  Rewrite using GNU ffcall. This is already registered as package FFI.
+
+  Fiddle with autoloading so we don't have to call DeclareSub
+  all the time.
+
+  Mangle C++ symbol names.
+
+  Get Perl to understand C header files (macros and function
+  declarations) with enough confidence to make them useful here.
 
 =head1 LICENSE
 
-Copyright (c) 1997, 2000 by John Tobey.  This package is distributed under
-the same license as Perl itself.  There is no expressed or implied
-warranty, since it is free software.  See the file README in the top
-level Perl source directory for details.  The Perl source may be found
-at:
+Copyright (c) 1997, 2000 by John Tobey.
+Copyright (c) 2005, 2007 by Reini Urban.
+This package is distributed under the same license as Perl itself.
+There is no expressed or implied warranty, since it is free software.
+See the file README in the top level Perl source directory for details.
+The Perl source may be found at:
 
-  http://www.perl.com/CPAN/src/5.0/
+  http://www.perl.com/CPAN/src/
 
 =head1 AUTHOR
 
 John Tobey, jtobey@john-edwin-tobey.org
 
+Maintainer: Reini Urban <rurban@cpan.org>
+
 =head1 SEE ALSO
 
 L<perl(1)>, L<perlfunc(1)> (for C<pack>), L<perlref(1)>,
-L<sigtrap(3)>, L<DynaLoader(3)>, L<perlxs(1)>, L<perlcall(1)>.
+L<sigtrap(3)>, L<DynaLoader(3)>, L<perlxs(1)>, L<perlcall(1)>,
+L<Win32::API>, L<FFI>.
 
 =cut

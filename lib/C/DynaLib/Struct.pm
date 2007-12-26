@@ -70,6 +70,10 @@ right are some possible Perl equivalents.
     returned_i = foo.m_int;	$rfoo->Unpack();
 				$returned_i = $rfoo->m_int;
 
+=head1 FUNCTIONS
+
+=head2 Define ( $new_class )
+
 =head1 BUGS
 
 Data member access is through autoloaded methods, so actual existing
@@ -90,6 +94,8 @@ perlfunc(1) (for C<pack>), perlref(1), perltie(1).
 
 
 use strict qw (vars subs);
+use vars qw($VERSION);
+$VERSION = '0.56';
 
 package C::DynaLib::Struct::Imp;
 

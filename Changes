@@ -69,3 +69,8 @@ passed along to DynaLoader::dl_load_file.
 
 0.55  Fri Feb 11 19:54:34 EST 2000
 	Allow to build with recent perls.
+
+0.56  2005-09-20 18:34:43 - 2007-12-26 22:38:11 rurban
+	Maintainer changed to Reini Urban <rurban@cpan.org>
+	Allow to build under cygwin and gcc >= 3.4
+	Added script/pl2exe.pl, moved tests to t/

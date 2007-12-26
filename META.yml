@@ -1,0 +1,15 @@
+--- #YAML:1.0
+name:                C-DynaLib
+version:             0.56
+abstract:            Perl interface to C compiled code.
+license:             ~
+author:              
+    - Reini Urban <rurban@cpan.org>
+generated_by:        ExtUtils::MakeMaker version 6.42
+distribution_type:   module
+requires:     
+    Test:                          0
+    Test::More:                    0
+meta-spec:
+    url:     http://module-build.sourceforge.net/META-spec-v1.3.html
+    version: 1.3

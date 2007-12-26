@@ -1,12 +1,22 @@
+# Win32/cygwin/mingw tests only
+use Test;
+BEGIN {
+    if ($^O !~ /(cygwin|MSWin|mingw)/) {
+	print"1..0 # skip This module does only work on Windows\n";
+	exit 0;
+    } else {
+      plan tests => 3
+    }
+};
+
+use C::DynaLib;
+use sigtrap;
+
 =pod
 
-This file is a Perl program that tests the C::DynaLib package
-on Windows 95.  It might work on iX86 NT, but I wouldn't place bets
-beyond that.  To run it after installation, type `perl README.win32'.
-If you want to run it before installing the module, your best bet is
-to rename test.pl to something like test.bak.pl, rename this file
-test.pl, and do `make test' (or nmake, or dmake, whatever make you
-use).  If successful, it will create a window with a message in the
+This file tests the C::DynaLib package on Windows
+To run it after installation, type `perl <thisfile>'.
+If successful, it will create a window with a message in the
 center.
 
 The program is modeled after the kind of "hello world" examples found
@@ -33,14 +43,14 @@ the pl2bat utility in the Win32 Perl distribution.  However, the
 text editors than are .bat files.  Wordpad, for instance, won't open
 them at all, and Notepad leaves them hopelessly corrupt when you save.
 
-Be that as it may, I have developed a pl2exe program that does what
+Be that as it may, John has developed a pl2exe.pl program that does what
 its name suggests.  It takes a perl script and adds some stuff at the
 beginning to make it have the PE format (well, close enough to fool
 Windows).  When executed, the program invokes perl on itself the way a
 pl2bat script does (and avoids the 9-argument limit on Windows 95,
 btw).  The thing lacking in pl2exe that would make it really useful is
 a way to link in resources without disrupting the delicate PE/script
-balance.  Maybe someday.
+balance.
 
 One final note about this file.  This is a demo/test program.  It is
 not necessarily good coding style.
@@ -54,7 +64,9 @@ use C::DynaLib::Struct;
 use strict;
 
 my $user32 = new C::DynaLib("USER32");
+ok ($user32);
 my $gdi32 = new C::DynaLib("GDI32");
+ok ($gdi32);
 
 #typedef struct _WNDCLASS {    // wc
 #
@@ -141,7 +153,7 @@ sub window_proc {
 
         # Wanna log your window messages?
 	#print "hwnd=$hwnd, uMsg=$uMsg, wParam=$wParam, lParam=$lParam\n";
-        
+
 	if ($uMsg == 0x0201	# WM_LBUTTONDOWN
 		|| $uMsg == 0x0002	# WM_DESTROY
 	) {
@@ -187,10 +199,13 @@ my $title_text = "Perl Does Win32";
 my $hwnd = &$CreateWindowEx(0, $rwc->lpszClassName,
 	$title_text,
 	0x00CF0000,	# WS_OVERLAPPEDWINDOW
-	0x80000000, # CW_USEDEFAULT
+	0x80000000,     # CW_USEDEFAULT
 	0x80000000, 0x80000000, 0x80000000,
 	0, 0, $rwc->hInstance,
 	0) or die "can't create window";
+
+ok($hwnd);
+
 &$ShowWindow($hwnd, 10);	# SW_SHOWDEFAULT
 &$UpdateWindow($hwnd);
 

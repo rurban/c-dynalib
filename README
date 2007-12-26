@@ -23,7 +23,7 @@ Example:
 
 The module has been tested successfully on iX86, Sparc, and Alpha
 machines.  However, there are probably compilers for even these chips
-which will require some porting.  If you tell me, I might fix it.
+which will require some porting. Please report any problems at rt.cpan.org
 
 Included are the following packages:
 
@@ -55,8 +55,7 @@ operation'.  Further documentation in pod format is in DynaLib.pm.
 The callback feature has sometimes caused grief in building the
 module.  If Makefile.PL writes a makefile but you can't get it to
 build, try `perl Makefile.PL CALLBACKS=0' followed by `make test',
-and tell me of your success or failure.
-
+and report of your success or failure.
 
 COPYRIGHT
 
@@ -69,3 +68,4 @@ in the top-level Perl source directory for more information.
 Enjoy!
 -John
 jtobey@john-edwin-tobey.org
+and Reini Urban <rurban@cpan.org>

@@ -1,18 +1,8 @@
-# Before `make install' is performed this script should be runnable with
-# `make test'. After `make install' it should work as `perl test.pl'
-
-######################### We start with some black magic to print on failure.
-
-# Change 1..1 below to 1..last_test_to_print .
-# (It may become useful if the test is moved to ./t subdirectory.)
-
-BEGIN { $^W = 1; $| = 1; print "1..10\n"; }
-END {print "not ok 1\n" unless $loaded;}
+use Test::Simple tests => 11;
 use C::DynaLib ();
-$loaded = 1;
-print "ok 1\n";
-
-######################### End of black magic.
+# optional dependency
+eval "use sigtrap;";
+ok(1);
 
 sub goof {
   require Carp;
@@ -29,26 +19,21 @@ use vars qw ($tmp1 $tmp2);
 sub DeclareSub { &C::DynaLib::DeclareSub }
 sub PTR_TYPE { &C::DynaLib::PTR_TYPE }
 
-$test_num = 2;
-sub assert {
-  my ($assertion, $got, $expected) = (@_, '', '');
-  if ($assertion && $got eq $expected) {
-    print "ok $test_num\n";
-  } else {
-    if ($got ne $expected) {
-      print "# expected \"$expected\", got \"$got\"\n";
-    }
-    print "not ok $test_num\n";
-  }
-  ++ $test_num;
-}
-
 use Config;
 $libc = new C::DynaLib($Config{'libc'} || "-lc");
 
 if (! $libc) {
-  if ($^O =~ /win32/i) {
-    $libc = new C::DynaLib("MSVCRT40") || new C::DynaLib("MSVCRT20");
+  # cygwin has no shared libc.so. Same for libm.so
+  if ($^O eq 'cygwin') {
+    $libc = new C::DynaLib("cygwin1.dll");
+  } elsif ($^O =~ /(MSWin32)/) {
+    $libc = new C::DynaLib("MSVCRT.DLL")
+      || new C::DynaLib("MSVCRT80")
+      || new C::DynaLib("MSVCRT71")
+      || new C::DynaLib("MSVCRT70")
+      || new C::DynaLib("MSVCRT60")
+      || new C::DynaLib("MSVCRT40")
+      || new C::DynaLib("MSVCRT20");
   } elsif ($^O =~ /linux/i) {
     # Some glibc versions install "libc.so" as a linker script,
     # unintelligible to dlopen().
@@ -56,7 +41,7 @@ if (! $libc) {
   }
 }
 if (! $libc) {
-  assert(0);
+  ok(0, "libc: $libc");
   die "Can't load -lc: ", DynaLoader::dl_error(), "\nGiving up.\n";
 }
 
@@ -65,20 +50,19 @@ if (! $libm_arg) {
   $libm = $libc;
 } elsif ($libm_arg !~ /libm\.a$/) {
   $libm = new C::DynaLib("-lm");
+} elsif ($^O eq 'cygwin') {
+  $libm = $libc;
 }
+
 $libm and $pow = $libm->DeclareSub ({ "name" => "pow",
 				      "return" => "d",
-				      "args" => ["d", "d"],
-				    });
-
-if (! $pow) {
-  print "# Can't find dynamic -lm!  Skipping the math lib tests.\n";
-  assert(1);
+				      "args" => ["d", "d"]});
+if (!$pow) {
+  skip(1, "Can't find dynamic -lm!  Skipping the math lib tests.");
 } else {
-  $sqrt2 = &$pow(2, 0.5);
-  assert(1, $sqrt2, 2**0.5);
+  $sqrt2 = 2**0.5;
+  ok(&$pow(2, 0.5) == $sqrt2, "pow(2, 0.5) from -lm");
 }
-
 $strlen = $libc->DeclareSub ({ "name" => "strlen",
 			       "return" => "i",
 			       "args" => ["p"],
@@ -90,13 +74,13 @@ $strlen = $libc->DeclareSub ({ "name" => "strlen",
 # $len = &$strlen("oof rab zab");
 
 $len = &$strlen($tmp = "oof rab zab");
-assert(1, $len, 11);
+ok($len == 11, "len == 11");
 
 sub my_sprintf {
   my ($fmt, @args) = @_;
   my (@arg_types) = ("P", "p");
   my ($width) = (length($fmt) + 1);
-  
+
   # note this is a *simplified* (non-crash-proof) printf parser!
   while ($fmt =~ m/(?:%[-\#0 +\']*\d*(?:\.\d*)?h?(.).*?)[^%]*/g) {
     my $spec = $1;
@@ -130,7 +114,7 @@ $fmt = "%x %10sfoo %d %10.7g %f %d %d %d";
 $expected = sprintf($fmt, @args);
 $got = my_sprintf($fmt, @args);
 
-assert(1, $got, $expected);
+ok($got eq $expected, "expected: $expected");
 
 $ptr_len = length(pack("p", $tmp = "foo"));
 
@@ -149,14 +133,15 @@ close TEST;
 # Can't do &$fopen("tmp.tmp", "r") in perls before 5.00402.
 $fp = &$fopen($tmp1 = "tmp.tmp", $tmp2 = "r");
 if (! $fp) {
-  assert(0);
+  ok(0, q(Can't do &$fopen("tmp.tmp", "r") in perls before 5.00402.));
 } else {
   # Hope "I" will work for type size_t!
   $fread = $libc->DeclareSub("fread", "i",
 			     "P", "I", "I", PTR_TYPE);
   $buffer = "\0" x 4;
   $result = &$fread($buffer, 1, length($buffer), $fp);
-  assert($result == 4, $buffer, "a st");
+  ok($result == 4);
+  ok($buffer eq "a st");
 }
 unlink "tmp.tmp";
 
@@ -166,18 +151,18 @@ if (@$C::DynaLib::Callback::Config) {
   }
   @list = qw(A bunch of elements with unique lengths);
   $array = pack("p*", @list);
-  
+
   $callback = new C::DynaLib::Callback("compare_lengths", "i",
 				       "P$ptr_len", "P$ptr_len");
-  
+
   $qsort = $libc->DeclareSub("qsort", "",
 			     "P", "I", "I", PTR_TYPE);
   &$qsort($array, scalar(@list), length($array) / @list, $callback->Ptr());
-  
+
   @expected = sort { length($a) <=> length($b) } @list;
   @got = unpack("p*", $array);
-  assert(1, "[@got]", "[@expected]");
-  
+  ok("[@got]" eq "[@expected]");
+
   # Hey!  We've got callbacks.  We've got a way to call them.
   # Who needs libraries?
   undef $callback;
@@ -186,25 +171,28 @@ if (@$C::DynaLib::Callback::Config) {
        $_[0] + 10*$_[1] + 100*$_[2];
      }, "i", "i", "p", "i");
   $sub = DeclareSub($callback->Ptr(), "i", "i", "p", "i");
-  
+
   $got = &$sub(1, $tmp = 7, 3.14);
   $expected = 371;
-  assert(1, $got, $expected);
-  
+  ok($got == $expected);
+
   undef $callback;
   $callback = new C::DynaLib::Callback(sub { shift }, "I", "i");
   $sub = DeclareSub($callback->Ptr(), "I", "i");
   $got = &$sub(-1);
-  
-  # Can't do this because it's broken in too many Perl versions:
-  # $expected = unpack("I", pack("i", -1));
-  $expected = 0;
-  for ($i = 1; $i > 0; $i <<= 1) {
-    $expected += $i;
+
+  # Can't do this generally because it's broken in too many Perl versions:
+  if (0 and $^O eq 'cygwin') { # TODO: needed for an earlier version
+    $expected = unpack("I", pack("i", -1));
+  } else {
+    $expected = 0;
+    for ($i = 1; $i > 0; $i <<= 1) {
+      $expected += $i;
+    }
+    $expected -= $i;
   }
-  $expected -= $i;
-  assert(1, $got, $expected);
-  
+  ok($got == $expected, "Callback Ii $got == $expected");
+
   $int_size = length(pack("i",0));
   undef $callback;
   $callback = new C::DynaLib::Callback
@@ -219,16 +207,12 @@ if (@$C::DynaLib::Callback::Config) {
   $pointer = unpack(PTR_TYPE, pack("P", $array));
   $struct = &$sub($pointer, 253);
   @got = unpack("iii", $struct);
-  assert(1, "[@got]", "[1729 31415 253]");
-  
+  ok("[@got]" eq "[1729 31415 253]");
+
 } else {
   print ("# Skipping callback tests on this platform\n");
-  assert(1);
-  assert(1);
-  assert(1);
-  assert(1);
 }
 
 $buf = "willo";
 C::DynaLib::Poke(unpack(PTR_TYPE, pack("p", $buf)), "he");
-assert(1, $buf, "hello");
+ok($buf eq "hello");

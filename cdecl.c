@@ -50,5 +50,10 @@ void *func;
   return (*((int (*)()) func))();
 }
 
+#if defined(__GNUC__) && __GNUC__ >= 3 && defined(__GNUC_MINOR__) && (__GNUC_MINOR__ >= 3)
+#define cdecl_CALL(func, type)						\
+    (type)((*((int (*)()) cdecl_pray))(ax,items,func))
+#else
 #define cdecl_CALL(func, type)						\
     ((*((type (*)()) cdecl_pray))(ax,items,func))
+#endif
