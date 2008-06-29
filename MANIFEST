@@ -19,5 +19,6 @@ script/pl2exe.pl
 t/01test.t
 t/02struct.t
 t/03win32.t
+t/04asmcall.t
 t/09distribution.t
 META.yml                                 Module meta-data (added by MakeMaker)

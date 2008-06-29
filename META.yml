@@ -1,7 +1,7 @@
 --- #YAML:1.0
 name:                C-DynaLib
-version:             0.56
-abstract:            Perl interface to C compiled code.
+version:             0.57
+abstract:            Dynamic Perl interface to C compiled code.
 license:             ~
 author:              
     - Reini Urban <rurban@cpan.org>

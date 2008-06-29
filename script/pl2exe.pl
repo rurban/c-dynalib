@@ -138,6 +138,6 @@ unless ($_ =~ /^\#!.*perl/ ) {
     print OUT "#!perl\n";
 }
 print OUT $_, <IN>;
-
 close IN;
 close OUT;
+chmod 0755, $name;

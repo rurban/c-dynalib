@@ -12,9 +12,9 @@ use warnings;
 no strict 'refs';
 use Carp;
 use vars qw($VERSION @ISA $AUTOLOAD @EXPORT @EXPORT_OK);
-use vars qw($GoodRet $DefConv);
+use vars qw($GoodRet $DefConv $decl);
 use subs qw(AUTOLOAD new LibRef DESTROY DeclareSub);
-our $VERSION = '0.56';
+our $VERSION = '0.57';
 
 # inline-able constants?
 sub DYNALIB_DEFAULT_CONV ();
@@ -240,7 +240,7 @@ __END__
 
 =head1 NAME
 
-C::DynaLib - Perl interface to C compiled code.
+C::DynaLib - Dynamic Perl interface to C compiled code.
 
 =head1 SYNOPSIS
 
@@ -403,8 +403,10 @@ find a way to do it with a given compiler by experimenting.
 =item C<decl>
 
 Allows you to specify a function's calling convention.  This is
-possible only with a named-parameter form of C<DeclareSub>.  See below
+possible only with a named-parameter form of C<DeclareSub>. See below
 for information about the supported calling conventions.
+
+The global $C::DynaLib::decl holds the string for global declaration convention.
 
 =item ->LibRef()
 
@@ -720,20 +722,21 @@ too much.  I haven't yet checked for memory leaks.
 
 =head1 TODO
 
-  Rewrite using GNU ffcall. This is already registered as package FFI.
+  Support fastcall (regs only) and ia64 (first 4 as regs, rest at stack) 
+  calling conventions.
 
   Fiddle with autoloading so we don't have to call DeclareSub
   all the time.
 
   Mangle C++ symbol names.
 
-  Get Perl to understand C header files (macros and function
-  declarations) with enough confidence to make them useful here.
+  Parse C header files (macros and function declarations) via Convert::Binary::C
+  to make them useful here.
 
 =head1 LICENSE
 
 Copyright (c) 1997, 2000 by John Tobey.
-Copyright (c) 2005, 2007 by Reini Urban.
+Copyright (c) 2005, 2007, 2008 by Reini Urban.
 This package is distributed under the same license as Perl itself.
 There is no expressed or implied warranty, since it is free software.
 See the file README in the top level Perl source directory for details.

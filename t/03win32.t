@@ -5,7 +5,7 @@ BEGIN {
 	print"1..0 # skip This module does only work on Windows\n";
 	exit 0;
     } else {
-      plan tests => 3
+      plan tests => 4
     }
 };
 
@@ -96,19 +96,19 @@ Define C::DynaLib::Struct('WNDCLASS',
 
 # The results of much sifting through C header files:
 
-my $PostQuitMessage = $user32->DeclareSub("PostQuitMessage",
+my $PostQuitMessage = $user32->DeclareSub("PostQuitMessageA",
 	"i",  # return type
         "i");  # argument type(s)
-my $GetClientRect = $user32->DeclareSub("GetClientRect",
+my $GetClientRect = $user32->DeclareSub("GetClientRectA",
 	"i",
         "i", "P");
-my $BeginPaint = $user32->DeclareSub("BeginPaint",
+my $BeginPaint = $user32->DeclareSub("BeginPaintA",
 	"i",
         "i", "P");
 my $DrawText = $user32->DeclareSub("DrawTextA",
 	"i",
         "I", "p", "I", "P", "I");
-my $EndPaint = $user32->DeclareSub("EndPaint",
+my $EndPaint = $user32->DeclareSub("EndPaintA",
 	"i",
         "i", "P");
 my $DefWindowProc = $user32->DeclareSub("DefWindowProcA",
@@ -126,13 +126,16 @@ my $GetStockObject = $gdi32->DeclareSub("GetStockObject",
 my $RegisterClass = $user32->DeclareSub("RegisterClassA",
 	"i",
         "P");
+my $UnregisterClass = $user32->DeclareSub("UnregisterClassA",
+	"i",
+        "p", "i");
 my $CreateWindowEx = $user32->DeclareSub("CreateWindowExA",
 	"i",
         "i", "p", "p", "i", "i", "i", "i", "i", "i", "i", "i", "i");
-my $ShowWindow = $user32->DeclareSub("ShowWindow",
+my $ShowWindow = $user32->DeclareSub("ShowWindowA",
 	"i",
         "i", "i");
-my $UpdateWindow = $user32->DeclareSub("UpdateWindow",
+my $UpdateWindow = $user32->DeclareSub("UpdateWindowA",
 	"i",
         "i");
 my $GetMessage = $user32->DeclareSub("GetMessageA",
@@ -177,6 +180,7 @@ sub window_proc {
 
 my $wnd_proc = new C::DynaLib::Callback(
 	\&window_proc, "i", "i", "i", "i", "i");
+ok($wnd_proc); #3
 
 #
 # Register the window class.
@@ -186,11 +190,19 @@ my $rwc = tie $wc, 'WNDCLASS';
 $rwc->style(0x0003);	# CS_HREDRAW | CS_VREDRAW
 $rwc->lpfnWndProc($wnd_proc->Ptr());
 $rwc->hInstance(0x00400000);
-$rwc->hIcon(&$LoadIcon(0, 32512));
-$rwc->hCursor(&$LoadCursor(0, 32512));
-$rwc->hbrBackground(&$GetStockObject(0));  # WHITE_BRUSH
+$rwc->hIcon(0);
+$rwc->hCursor(0);
+$rwc->hbrBackground(0);
+# FIXME: XP crashes with LoadIcon
+# $rwc->hIcon(&$LoadIcon(0, 32512));     #  IDI_APPLICATION
+# $rwc->hCursor(&$LoadCursor(0, 32512)); #  IDI_ARROW
+# $rwc->hbrBackground(&$GetStockObject(0));  # WHITE_BRUSH
 $rwc->lpszClassName("w32test");
-&$RegisterClass($wc) or die "can't register window class";
+&UnregisterClass( $rwc->lpszClassName, 0x00400000 );
+unless (&$RegisterClass($wc)) {
+  &UnregisterClass( $rwc->lpszClassName, 0x00400000 );
+  &$RegisterClass($wc) or die "can't register window class";
+}
 
 #
 # Create the window.
@@ -204,7 +216,7 @@ my $hwnd = &$CreateWindowEx(0, $rwc->lpszClassName,
 	0, 0, $rwc->hInstance,
 	0) or die "can't create window";
 
-ok($hwnd);
+ok($hwnd); #4
 
 &$ShowWindow($hwnd, 10);	# SW_SHOWDEFAULT
 &$UpdateWindow($hwnd);

@@ -140,7 +140,7 @@ int main(argc, argv)
   signal(SIGILL, handler);
 #endif
   p1 = (int *) alloca(sizeof *p1);
-  p2 = (int *) alloca(sizeof *p2);
+  p2 = (int *) alloca(sizeof *p2); /* p1 - 0x20 */
   grows_downward = (p1 - p2 > 0 ? 1 : 0);
   one_by_one = (p1 - p2 == (grows_downward ? 1 : -1));
 
@@ -153,6 +153,14 @@ int main(argc, argv)
   if (! one_arg || ! three_args) {
     if (adjust[0] != 0 && adjust[0] == adjust[1]) {
       do_adjust = adjust[0];
+      one_arg = do_one_arg(NULL);
+      three_args = do_three_args(0, NULL, 0.0);
+    }
+  }
+  if (! one_arg || ! three_args) {
+    if (do_adjust != 0 && adjust[0] == adjust[1]) {
+      do_adjust = (int)(p1 - p2);
+      adjust[0] = adjust[1] = do_adjust;
       one_arg = do_one_arg(NULL);
       three_args = do_three_args(0, NULL, 0.0);
     }

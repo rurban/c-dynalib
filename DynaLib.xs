@@ -23,15 +23,19 @@ extern "C" {
 #endif
 
 #ifdef DYNALIB_USE_cdecl
+#define DYNALIB_DECL "cdecl"
 #include "cdecl.c"
 #endif
 #ifdef DYNALIB_USE_sparc
+#define DYNALIB_DECL "sparc"
 #include "sparc.c"
 #endif
 #ifdef DYNALIB_USE_alpha
+#define DYNALIB_DECL "alpha"
 #include "alpha.c"
 #endif
 #ifdef DYNALIB_USE_hack30
+#define DYNALIB_DECL "hack30"
 #include "hack30.c"
 #endif
 
@@ -356,5 +360,8 @@ Poke(dest, data)
 
 
 BOOT:
+	/* $C::DynaLib::decl = cdecl or hack30 or ...; */
+	sv_setsv(get_sv("C::DynaLib::decl", 1), newSVpv(DYNALIB_DECL, 0));
+
 	/* Setup the callback config array. */
 	sv_setsv(SvRV(ST(2)), newRV((SV*) sv_2mortal(cb_init(ST(2)))));

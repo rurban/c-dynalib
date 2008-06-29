@@ -1,4 +1,4 @@
-use Test::Simple tests => 11;
+use Test::More tests => 11;
 use C::DynaLib ();
 # optional dependency
 eval "use sigtrap;";
@@ -41,7 +41,7 @@ if (! $libc) {
   }
 }
 if (! $libc) {
-  ok(0, "libc: $libc");
+  ok(0, "libc: $libc"); #2
   die "Can't load -lc: ", DynaLoader::dl_error(), "\nGiving up.\n";
 }
 
@@ -58,10 +58,18 @@ $libm and $pow = $libm->DeclareSub ({ "name" => "pow",
 				      "return" => "d",
 				      "args" => ["d", "d"]});
 if (!$pow) {
-  skip(1, "Can't find dynamic -lm!  Skipping the math lib tests.");
+ SKIP: {
+  skip "Can't find dynamic -lm!  Skipping the math lib tests.", 1;
+ }
+} elsif ($C::DynaLib::decl eq 'hack30') {
+ TODO: {
+  local $TODO = "hack30 can not handle double";
+  $sqrt2 = 2**0.5;
+  ok(&$pow(2, 0.5) == $sqrt2, "pow(2, 0.5) from -lm"); #2
+ }  
 } else {
   $sqrt2 = 2**0.5;
-  ok(&$pow(2, 0.5) == $sqrt2, "pow(2, 0.5) from -lm");
+  ok(&$pow(2, 0.5) == $sqrt2, "pow(2, 0.5) from -lm"); #2
 }
 $strlen = $libc->DeclareSub ({ "name" => "strlen",
 			       "return" => "i",
@@ -74,7 +82,7 @@ $strlen = $libc->DeclareSub ({ "name" => "strlen",
 # $len = &$strlen("oof rab zab");
 
 $len = &$strlen($tmp = "oof rab zab");
-ok($len == 11, "len == 11");
+ok($len == 11, "len == 11"); #3
 
 sub my_sprintf {
   my ($fmt, @args) = @_;
@@ -114,7 +122,7 @@ $fmt = "%x %10sfoo %d %10.7g %f %d %d %d";
 $expected = sprintf($fmt, @args);
 $got = my_sprintf($fmt, @args);
 
-ok($got eq $expected, "expected: $expected");
+ok($got eq $expected, "expected: $expected"); #4
 
 $ptr_len = length(pack("p", $tmp = "foo"));
 
@@ -133,15 +141,15 @@ close TEST;
 # Can't do &$fopen("tmp.tmp", "r") in perls before 5.00402.
 $fp = &$fopen($tmp1 = "tmp.tmp", $tmp2 = "r");
 if (! $fp) {
-  ok(0, q(Can't do &$fopen("tmp.tmp", "r") in perls before 5.00402.));
+  ok(0, q(Can't do &$fopen("tmp.tmp", "r") in perls before 5.00402.)); #5
 } else {
   # Hope "I" will work for type size_t!
   $fread = $libc->DeclareSub("fread", "i",
 			     "P", "I", "I", PTR_TYPE);
   $buffer = "\0" x 4;
   $result = &$fread($buffer, 1, length($buffer), $fp);
-  ok($result == 4);
-  ok($buffer eq "a st");
+  ok($result == 4); #5
+  ok($buffer eq "a st"); #6
 }
 unlink "tmp.tmp";
 
@@ -161,7 +169,7 @@ if (@$C::DynaLib::Callback::Config) {
 
   @expected = sort { length($a) <=> length($b) } @list;
   @got = unpack("p*", $array);
-  ok("[@got]" eq "[@expected]");
+  ok("[@got]" eq "[@expected]"); #7
 
   # Hey!  We've got callbacks.  We've got a way to call them.
   # Who needs libraries?
@@ -174,7 +182,7 @@ if (@$C::DynaLib::Callback::Config) {
 
   $got = &$sub(1, $tmp = 7, 3.14);
   $expected = 371;
-  ok($got == $expected);
+  ok($got == $expected); #8
 
   undef $callback;
   $callback = new C::DynaLib::Callback(sub { shift }, "I", "i");
@@ -191,7 +199,7 @@ if (@$C::DynaLib::Callback::Config) {
     }
     $expected -= $i;
   }
-  ok($got == $expected, "Callback Ii $got == $expected");
+  ok($got == $expected, "Callback Ii $got == $expected"); #9
 
   $int_size = length(pack("i",0));
   undef $callback;
@@ -207,7 +215,7 @@ if (@$C::DynaLib::Callback::Config) {
   $pointer = unpack(PTR_TYPE, pack("P", $array));
   $struct = &$sub($pointer, 253);
   @got = unpack("iii", $struct);
-  ok("[@got]" eq "[1729 31415 253]");
+  ok("[@got]" eq "[1729 31415 253]"); #10
 
 } else {
   print ("# Skipping callback tests on this platform\n");
@@ -215,4 +223,4 @@ if (@$C::DynaLib::Callback::Config) {
 
 $buf = "willo";
 C::DynaLib::Poke(unpack(PTR_TYPE, pack("p", $buf)), "he");
-ok($buf eq "hello");
+ok($buf eq "hello"); #11

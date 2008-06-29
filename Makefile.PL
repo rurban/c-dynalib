@@ -9,7 +9,7 @@ my($archname, @convention, $convention,
    $conv_xs, $cbfunc_c, $cdecl_h, $postamble,
    $is_gcc, $is_borland, $is_dynamic, $Verbose);
 
-$Verbose = 1;
+# $Verbose = 1;
 $conv_xs = "conv.xsi";
 $cbfunc_c = "cbfunc.c";
 $cdecl_h = "cdecl.h";
@@ -51,12 +51,14 @@ for (@ARGV) {
     /^DECL=(.*)$/ and push @convention, split(",", $1);
     /^CALLBACKS=(\d+)$/ and $num_callbacks = $1;
     /^(-D.*)(?:\=(.*))?$/ and $cflags{$1} = $2;
+    /^Verbose$/i and $Verbose = 1;
 }
 
 # Appease MakeMaker:
 @ARGV = grep { !/^(DECL=|CALLBACKS=(\d+)$|-D.)/ } @ARGV;
 
 $archname = $Config{archname};
+# TODO: support for the ia64 fastcall derivate (fast 4 in regs, rest in args)
 unless (@convention) {
     for (
 	 [ '^i?[x3-6]86', sub {'cdecl'} ],
@@ -72,10 +74,17 @@ unless (@convention) {
 			}
 			'alpha'} ],
 	 [ 'win32', sub {'cdecl'} ],
-#	 [ '^cygwin-thread-multi-64int', sub {'hack30'} ],
+	 # [ '^cygwin-thread-multi-64int', sub {my $CDECL_ADJUST = -32; 'cdecl'} ],
 	 [ '', sub { () } ],
 	 )
     { @convention = &{$_->[1]}, last if $archname =~ /$_->[0]/i }
+}
+
+my $optimize = $Config{optimize};
+if ($^O eq 'MSWin32' and $Config{optimize} =~ /^cl/i) {
+  $optimize = '/Od';
+} elsif ($Config{optimize} =~ /[\-\/]O\w/)  {
+  $optimize =~ s/O\w/O0/;
 }
 
 WriteMakefile(
@@ -89,7 +98,7 @@ WriteMakefile(
     'H'         => [],
     'C'         => ['DynaLib.c'],
     'INC'	=> '-I.',
-    'OPTIMIZE'	=> $is_gcc ? '-O0' : '/Od',
+    'OPTIMIZE'	=> $optimize,
 
     'PREREQ_PM' => {
         'Test' => 0,
@@ -153,6 +162,7 @@ int main()
 PROG
     close PROG;
 
+    my $ccflags = $Config{ccflags};
     @candidate = ();
     push @candidate, "$Config{cc} $Config{ccflags} -DNARF -I$self->{PERL_INC} testtest.c -o testtest$self->{EXE_EXT} >/dev/null 2>&1"
 	unless $Verbose;
@@ -238,12 +248,12 @@ sub make_postamble {
 ***
 *** I can't figure out the correct way to pass arguments to a C function
 *** on this system.  This may be due to porting issues, a perl installation
-*** problem, or any number of things.  Maybe `perl Makefile.PL verbose'
+*** problem, or any number of things.  Maybe `perl Makefile.PL Verbose'
 *** will shed some light.
 ***
 *** I'll use the `hack30' calling convention, which may work some or most
-*** of the time.  Or it may crash your programs.  A better solution would
-*** be to add support for your system's calling convention.
+*** of the time for integers alike. Or it may crash your programs. A better 
+*** solution would be to add support for your system's calling convention.
 ***
 *** See DynaLib.pm for a discussion of hack30.
 ***
@@ -262,7 +272,7 @@ $cdecl_h: $0 \$(CONFIGDEP) testcall\$(EXE_EXT)
 	$self->{how_to_run}
 
 testcall\$(EXE_EXT) : testcall.c
-	\$(CC) `\$(PERL) -MExtUtils::Embed -e ccopts` testcall.c -o\$\@
+	\$(CC) `\$(PERL) -MExtUtils::Embed -e ccopts` \$(OPTIMIZE) testcall.c -o\$\@
 ";
 }
 
@@ -272,7 +282,10 @@ sub MY::postamble {
 
     print "Using calling convention(s): @convention\n"
 	if $Verbose;
-    for (@convention) { $cflags{"-DDYNALIB_USE_$_"} = undef; }
+    for (@convention) { 
+      $cflags{"-DDYNALIB_DECL=\\\"$_\\\""} = undef;
+      $cflags{"-DDYNALIB_USE_$_"} = undef;
+    }
 
     print "Default calling convention: $convention[0]\n"
 	if $Verbose;
@@ -283,25 +296,16 @@ sub MY::postamble {
 	if $Verbose;
     $cflags{"-DDYNALIB_NUM_CALLBACKS"} = $num_callbacks;
 
-    $postamble .= "\nDEFINE =";
+    my $defines = "\nDEFINE =";
     for (sort keys %cflags) {
-	$postamble .= " $_";
-	$postamble .= "=$cflags{$_}" if defined $cflags{$_};
+	$defines .= " $_";
+	$defines .= "=$cflags{$_}" if defined $cflags{$_};
     }
+    $postamble .= $defines;
+    print "Additional definitions: $defines\n"
+      if $Verbose and scalar(keys %cflags)>1;
     write_conv();
     write_cbfunc();
-
-    if (0)
-    {
-	print "\n> ";
-	no strict;
-	while (<STDIN>) {
-	    eval;
-	    print "$@\n" if $@;
-	    print "\n> ";
-	}
-	print "\n";
-    }
 
     return $postamble;
 }
