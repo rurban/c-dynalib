@@ -1,14 +1,12 @@
 # Win32/cygwin/mingw tests only
-use Test;
 BEGIN {
     if ($^O !~ /(cygwin|MSWin|mingw)/) {
 	print"1..0 # skip This module does only work on Windows\n";
 	exit 0;
-    } else {
-      plan tests => 4
     }
 };
 
+use Test::Simple tests => 8;
 use C::DynaLib;
 use sigtrap;
 
@@ -55,18 +53,23 @@ balance.
 One final note about this file.  This is a demo/test program.  It is
 not necessarily good coding style.
 
+About DeclareSubA:
+Windows versions were consistent in their user32, gdi32.dll names.
+All names worked with the final A suffix.
+Now (XP and newer) the A function is not exported anymore.
+
 =cut
 
 use 5.00402;
 
-use C::DynaLib;
 use C::DynaLib::Struct;
 use strict;
+use DynaLoader;
 
 my $user32 = new C::DynaLib("USER32");
-ok ($user32);
+ok ($user32, "user32.dll loaded");
 my $gdi32 = new C::DynaLib("GDI32");
-ok ($gdi32);
+ok ($gdi32, "gdi32.dll loaded");
 
 #typedef struct _WNDCLASS {    // wc
 #
@@ -94,57 +97,71 @@ Define C::DynaLib::Struct('WNDCLASS',
         p => ['lpszClassName'],
 );
 
-# The results of much sifting through C header files:
+sub DeclareSubA {
+  my ($lib, $name, @args) = @_;
+  no strict 'refs';
+  if (DynaLoader::dl_find_symbol($lib->LibRef(),$name)) {
+    return $lib->DeclareSub($name, @args);
+  } elsif (DynaLoader::dl_find_symbol($lib->LibRef(),$name."A")) {
+    $name .= "A";
+    return $lib->DeclareSub($name, @args);
+  } else {
+    warn "$name and $name"."A not found";
+  }
+}
 
-my $PostQuitMessage = $user32->DeclareSub("PostQuitMessageA",
-	"i",  # return type
+# The results of much sifting through C header files:
+my $PostQuitMessage = DeclareSubA($user32,"PostQuitMessage",
+	"i",   # return type
         "i");  # argument type(s)
-my $GetClientRect = $user32->DeclareSub("GetClientRectA",
+ok ($PostQuitMessage, "PostQuitMessage declared");
+my $GetClientRect = DeclareSubA($user32,"GetClientRect",
 	"i",
         "i", "P");
-my $BeginPaint = $user32->DeclareSub("BeginPaintA",
+my $BeginPaint = DeclareSubA($user32, "BeginPaint",
 	"i",
         "i", "P");
-my $DrawText = $user32->DeclareSub("DrawTextA",
+my $DrawText = DeclareSubA($user32, "DrawText",
 	"i",
         "I", "p", "I", "P", "I");
-my $EndPaint = $user32->DeclareSub("EndPaintA",
+my $EndPaint = DeclareSubA($user32, "EndPaint",
 	"i",
         "i", "P");
-my $DefWindowProc = $user32->DeclareSub("DefWindowProcA",
+my $DefWindowProc = DeclareSubA($user32, "DefWindowProc",
 	"i",
         "i", "i", "i", "i");
-my $LoadIcon = $user32->DeclareSub("LoadIconA",
+my $LoadIcon = DeclareSubA($user32, "LoadIcon",
 	"i",
         "i", "i");
-my $LoadCursor = $user32->DeclareSub("LoadCursorA",
+my $LoadCursor = DeclareSubA($user32, "LoadCursor",
 	"i",
         "i", "i");
-my $GetStockObject = $gdi32->DeclareSub("GetStockObject",
+my $GetStockObject = DeclareSubA($gdi32, "GetStockObject",
 	"i",
         "i");
-my $RegisterClass = $user32->DeclareSub("RegisterClassA",
+my $RegisterClass = DeclareSubA($user32, "RegisterClass",
 	"i",
         "P");
-my $UnregisterClass = $user32->DeclareSub("UnregisterClassA",
+my $UnregisterClass = DeclareSubA($user32, "UnregisterClass",
 	"i",
         "p", "i");
-my $CreateWindowEx = $user32->DeclareSub("CreateWindowExA",
+my $CreateWindowEx = DeclareSubA($user32, "CreateWindowEx",
 	"i",
-        "i", "p", "p", "i", "i", "i", "i", "i", "i", "i", "i", "i");
-my $ShowWindow = $user32->DeclareSub("ShowWindowA",
+        "i", "p", "p", "i", "i", "i", "i", "i", "i", "i", "i", "p");
+ok ($CreateWindowEx, "CreateWindowEx declared");
+my $ShowWindow = DeclareSubA($user32, "ShowWindow",
 	"i",
         "i", "i");
-my $UpdateWindow = $user32->DeclareSub("UpdateWindowA",
+my $UpdateWindow = DeclareSubA($user32, "UpdateWindow",
 	"i",
         "i");
-my $GetMessage = $user32->DeclareSub("GetMessageA",
+my $GetMessage = DeclareSubA($user32, "GetMessage",
 	"i",
         "P", "i", "i", "i");
-my $TranslateMessage = $user32->DeclareSub("TranslateMessage",
+my $TranslateMessage = DeclareSubA($user32, "TranslateMessage",
 	"i",
         "P");
-my $DispatchMessage = $user32->DeclareSub("DispatchMessageA",
+my $DispatchMessage = DeclareSubA($user32, "DispatchMessage",
 	"i",
         "P");
 
@@ -152,55 +169,67 @@ my $DispatchMessage = $user32->DeclareSub("DispatchMessageA",
 # Main window's callback.
 #
 sub window_proc {
-	my ($hwnd, $uMsg, $wParam, $lParam) = @_;
+  my ($hwnd, $uMsg, $wParam, $lParam) = @_;
 
-        # Wanna log your window messages?
-	#print "hwnd=$hwnd, uMsg=$uMsg, wParam=$wParam, lParam=$lParam\n";
+  # Wanna log your window messages?
+  #print "hwnd=$hwnd, uMsg=$uMsg, wParam=$wParam, lParam=$lParam\n";
 
-	if ($uMsg == 0x0201	# WM_LBUTTONDOWN
-		|| $uMsg == 0x0002	# WM_DESTROY
-	) {
-		&$PostQuitMessage(0);
-		return 0;
-	} elsif ($uMsg == 0x000F) {	# WM_PAINT
-		my $text = "Hello from Perl!";
-                # This should be big enough for a PAINTSTRUCT, I hope:
-		my $ps = "\0" x 1024;
-		my $rect = "\0" x 64;
-		my $hdc;
-		&$GetClientRect($hwnd, $rect);
-		$hdc = &$BeginPaint($hwnd, $ps);
-		&$DrawText($hdc, $text, length($text), $rect,
-			0x00000025);	# DT_SINGLELINE | DT_CENTER | DT_VCENTER
-		&$EndPaint($hwnd, $ps);
-		return 0;
-	}
-	return &$DefWindowProc($hwnd, $uMsg, $wParam, $lParam);
+  if ($uMsg == 0x0201		# WM_LBUTTONDOWN
+      || $uMsg == 0x0002	# WM_DESTROY
+     ) {
+    &$PostQuitMessage(0);
+    return 0;
+  } elsif ($uMsg == 0x000F) {	# WM_PAINT
+    my $text = "Hello from Perl!  Please click somewhere into this window to continue...";
+    # This should be big enough for a PAINTSTRUCT, I hope:
+    my $ps = "\0" x 1024;
+    my $rect = "\0" x 64;
+    my $hdc;
+    &$GetClientRect($hwnd, $rect);
+    $hdc = &$BeginPaint($hwnd, $ps);
+    &$DrawText($hdc, $text, length($text), $rect,
+	       0x00000025);	# DT_SINGLELINE | DT_CENTER | DT_VCENTER
+    &$EndPaint($hwnd, $ps);
+    return 0;
+  }
+  return &$DefWindowProc($hwnd, $uMsg, $wParam, $lParam);
 }
 
 my $wnd_proc = new C::DynaLib::Callback(
-	\&window_proc, "i", "i", "i", "i", "i");
-ok($wnd_proc); #3
+					\&window_proc, "i", "i", "i", "i", "i");
+ok ($wnd_proc, "wnd_proc Callback declared");
 
 #
 # Register the window class.
 #
 my $wc;
 my $rwc = tie $wc, 'WNDCLASS';
-$rwc->style(0x0003);	# CS_HREDRAW | CS_VREDRAW
+ok ($wc, "tied WNDCLASS");
+$rwc->style(0x0003);				# CS_HREDRAW | CS_VREDRAW
 $rwc->lpfnWndProc($wnd_proc->Ptr());
 $rwc->hInstance(0x00400000);
-$rwc->hIcon(0);
-$rwc->hCursor(0);
-$rwc->hbrBackground(0);
-# FIXME: XP crashes with LoadIcon
-# $rwc->hIcon(&$LoadIcon(0, 32512));     #  IDI_APPLICATION
-# $rwc->hCursor(&$LoadCursor(0, 32512)); #  IDI_ARROW
-# $rwc->hbrBackground(&$GetStockObject(0));  # WHITE_BRUSH
+$rwc->cbClsExtra(0);
+$rwc->cbWndExtra(0);
+my $have_Win32 = eval { require Win32; 1; };
+my ($desc, $major, $minor, $build, $id) = $have_Win32 ? Win32::GetOSVersion() : (0,0,0,0,0);
+if ($major >= 5 and $minor >= 1) {
+  # FIXME: XP crashes with LoadIcon
+  $rwc->hIcon(0);
+  $rwc->hCursor(0);
+  $rwc->hbrBackground(&$GetStockObject(0));  	# WHITE_BRUSH
+  #$rwc->hbrBackground(0);
+} else {
+  $rwc->hIcon(&$LoadIcon(0, 32512));     	# IDI_APPLICATION
+  $rwc->hCursor(&$LoadCursor(0, 32512));	# IDI_ARROW
+  $rwc->hbrBackground(&$GetStockObject(0));  	# WHITE_BRUSH
+}
+$rwc->lpszMenuName(0);
 $rwc->lpszClassName("w32test");
-&UnregisterClass( $rwc->lpszClassName, 0x00400000 );
+ok ($rwc->lpszClassName, "rwc->lpszClassName");
+
+# &$UnregisterClass( $rwc->lpszClassName, 0x00400000 );
 unless (&$RegisterClass($wc)) {
-  &UnregisterClass( $rwc->lpszClassName, 0x00400000 );
+  &$UnregisterClass( $rwc->lpszClassName, 0x00400000 );
   &$RegisterClass($wc) or die "can't register window class";
 }
 
@@ -208,15 +237,16 @@ unless (&$RegisterClass($wc)) {
 # Create the window.
 #
 my $title_text = "Perl Does Win32";
+no strict 'refs';
 my $hwnd = &$CreateWindowEx(0, $rwc->lpszClassName,
-	$title_text,
-	0x00CF0000,	# WS_OVERLAPPEDWINDOW
-	0x80000000,     # CW_USEDEFAULT
-	0x80000000, 0x80000000, 0x80000000,
-	0, 0, $rwc->hInstance,
-	0) or die "can't create window";
+			    $title_text,
+			    0x00CF0000,		# WS_OVERLAPPEDWINDOW
+			    0x80000000,     	# CW_USEDEFAULT
+			    0x80000000, 0x80000000, 0x80000000,
+			    0, 0, $rwc->hInstance,
+			    0) or die "can't create window";
 
-ok($hwnd); #4
+ok ($hwnd, "CreateWindowEx called");
 
 &$ShowWindow($hwnd, 10);	# SW_SHOWDEFAULT
 &$UpdateWindow($hwnd);
@@ -226,6 +256,7 @@ ok($hwnd); #4
 #
 my $msg = "\0" x 64;
 while (&$GetMessage($msg, 0, 0, 0)) {
-	&$TranslateMessage($msg);
-	&$DispatchMessage($msg);
+  &$TranslateMessage($msg);
+  &$DispatchMessage($msg);
 }
+&$UnregisterClass( $rwc->lpszClassName, 0x00400000 );

@@ -92,10 +92,7 @@ perlfunc(1) (for C<pack>), perlref(1), perltie(1).
 
 =cut
 
-
 use strict qw (vars subs);
-use vars qw($VERSION);
-$VERSION = '0.57';
 
 package C::DynaLib::Struct::Imp;
 

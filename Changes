@@ -1,6 +1,10 @@
 Revision history for Perl extension C::DynaLib 
 (formerly ExtUtils::DynaLib, very formerly CLib).
 
+0.58  2008-06-29 12:59:11 rurban
+	removed C::DynaLib::Struct::VERSION
+	work on failing win32 test
+
 0.57  2008-01-18 12:34:43 rurban
 	Fix optimize for non-gcc, non-msvc
         define $C::DynaLib::decl to "cdecl", "hack30", ...

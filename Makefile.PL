@@ -22,7 +22,7 @@ use subs qw(write_conv write_cbfunc write_cdecl_h);
 
 $postamble = "
 clean::
-	\$(RM_F) $conv_xs $cbfunc_c
+	\$(RM_F) $conv_xs $cbfunc_c *.core *.stackdump
 
 $conv_xs: $0 \$(CONFIGDEP)
 
@@ -105,7 +105,7 @@ WriteMakefile(
         'Test::More' => 0,
     },
     ($] >= 5.005 ?
-     ('AUTHOR' => 'Reini Urban <rurban@cpan.org>',
+     ('AUTHOR' => 'John Tobey <jtobey@john-edwin-tobey.org>',
       'ABSTRACT_FROM' => 'DynaLib.pm') : ()),
 );
 

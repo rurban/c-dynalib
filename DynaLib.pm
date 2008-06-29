@@ -14,7 +14,7 @@ use Carp;
 use vars qw($VERSION @ISA $AUTOLOAD @EXPORT @EXPORT_OK);
 use vars qw($GoodRet $DefConv $decl);
 use subs qw(AUTOLOAD new LibRef DESTROY DeclareSub);
-our $VERSION = '0.57';
+our $VERSION = '0.58';
 
 # inline-able constants?
 sub DYNALIB_DEFAULT_CONV ();

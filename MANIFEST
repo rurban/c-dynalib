@@ -12,7 +12,6 @@ cdecl.c
 hack30.c
 sparc.c
 testcall.c
-lib/C/DynaLib/Makefile.PL
 lib/C/DynaLib/Struct.pm
 Asm-0.01.tar.gz
 script/pl2exe.pl
