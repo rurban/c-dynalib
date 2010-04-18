@@ -11,10 +11,11 @@ use strict;
 use warnings;
 no strict 'refs';
 use Carp;
+#use Convert::Binary::C;
 use vars qw($VERSION @ISA $AUTOLOAD @EXPORT @EXPORT_OK);
 use vars qw($GoodRet $DefConv $decl);
 use subs qw(AUTOLOAD new LibRef DESTROY DeclareSub);
-our $VERSION = '0.58';
+$VERSION = '0.59';
 
 # inline-able constants?
 sub DYNALIB_DEFAULT_CONV ();
@@ -83,7 +84,9 @@ sub DeclareSub {
 
     # Using named parameters.
     ! @_ && (($ptr = $first->{'ptr'}) || defined ($name = $first->{'name'}))
-      or croak 'Usage: $lib->DeclareSub({ "name" => $func_name [, "return" => $ret_type] [, "args" => \@arg_types] [, "decl" => $decl] })';
+      or croak 'Usage: $lib->DeclareSub('.
+        '{ "name" => $func_name [, "return" => $ret_type] [,'.
+        '  "args" => \@arg_types] [, "decl" => $decl] })';
 
     $libref = $first->{'libref'};
     $convention = $first->{'decl'} || $convention;
@@ -147,6 +150,28 @@ sub DeclareSub {
   };
 }
 
+sub Parse {
+  my $definition = shift;
+  my $c;
+  require Convert::Binary::C;
+  Convert::Binary::C->import;
+  if (ref $definition eq 'Convert::Binary::C') {
+    $c = $definition;
+    $c->parse(@_);
+  } else {
+    require C::DynaLib::PerlTypes;
+    my $c = new Convert::Binary::C $C::DynaLib::PerlTypes::PerlTypes;
+    $c->parse($definition, @_);
+  }
+  # these are all structs and unions, but we want the functions
+  for my $s ($c->compound) {
+    my $class = $s->identifier;
+    C::DynaLib::Struct::Parse($s->sourcify);
+  }
+  use Data::Dumper;
+  print Dumper($c);
+}
+
 sub my_carp {
   # inspired by Exporter
   my $text = shift;
@@ -155,7 +180,7 @@ sub my_carp {
     $Carp::CarpLevel = 2;
     $text =~ s/(?: in pack)? at \(eval \d+\) line \d+.*\n//;
   }
-  carp($text); 
+  carp($text);
 };
 
 sub my_croak {
@@ -252,7 +277,7 @@ C::DynaLib - Dynamic Perl interface to C compiled code.
   $func = $lib->DeclareSub( $symbol_name
 			    [, $return_type [, @arg_types] ] );
   # or
-  $func = $lib->DeclareSub( { "name"    => $symbol_name,
+  $func = $lib->DeclareSub( { "name" => $symbol_name,
 			      [param => $value,] ... } );
   # or
   use C::DynaLib qw(DeclareSub);
@@ -415,6 +440,11 @@ or the C<C::DynaLib::LibRef> method.  You must use a named-parameter
 form of C<DeclareSub> in order to specify this argument.
 
 =back
+
+=head2 Parse( '<<EOS' ) - Parse macro, function and struct declarations
+
+The argument may be c-string (best done via '<<EOS' ... EOS)
+or a Convert::Binary::C object.
 
 =head2 Calling a declared function
 
@@ -722,7 +752,7 @@ too much.  I haven't yet checked for memory leaks.
 
 =head1 TODO
 
-  Support fastcall (regs only) and ia64 (first 4 as regs, rest at stack) 
+  Support fastcall (regs only) and ia64 (first four in regs, rest on stack)
   calling conventions.
 
   Fiddle with autoloading so we don't have to call DeclareSub
@@ -730,8 +760,8 @@ too much.  I haven't yet checked for memory leaks.
 
   Mangle C++ symbol names.
 
-  Parse C header files (macros and function declarations) via Convert::Binary::C
-  to make them useful here.
+  Parse C header files (macros, structs and function declarations) via
+  Convert::Binary::C to make them useful here.
 
 =head1 LICENSE
 
@@ -754,6 +784,6 @@ Maintainer: Reini Urban <rurban@cpan.org>
 
 L<perl(1)>, L<perlfunc(1)> (for C<pack>), L<perlref(1)>,
 L<sigtrap(3)>, L<DynaLoader(3)>, L<perlxs(1)>, L<perlcall(1)>,
-L<Win32::API>, L<FFI>.
+L<Win32::API>, L<FFI>, L<DynaLib::Struct>.
 
 =cut

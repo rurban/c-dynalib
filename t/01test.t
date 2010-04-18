@@ -1,4 +1,4 @@
-use Test::More tests => 11;
+use Test::Simple tests => 11;
 use C::DynaLib ();
 # optional dependency
 eval "use sigtrap;";
@@ -58,15 +58,13 @@ $libm and $pow = $libm->DeclareSub ({ "name" => "pow",
 				      "return" => "d",
 				      "args" => ["d", "d"]});
 if (!$pow) {
- SKIP: {
-  skip "Can't find dynamic -lm!  Skipping the math lib tests.", 1;
- }
+  skip(1, "Can't find dynamic -lm!  Skipping the math lib tests.");
 } elsif ($C::DynaLib::decl eq 'hack30') {
  TODO: {
   local $TODO = "hack30 can not handle double";
   $sqrt2 = 2**0.5;
   ok(&$pow(2, 0.5) == $sqrt2, "pow(2, 0.5) from -lm"); #2
- }  
+ }
 } else {
   $sqrt2 = 2**0.5;
   ok(&$pow(2, 0.5) == $sqrt2, "pow(2, 0.5) from -lm"); #2

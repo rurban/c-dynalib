@@ -1,12 +1,13 @@
+# -*- perl -*-
+use Test::More tests => 8;
 # Win32/cygwin/mingw tests only
 BEGIN {
-    if ($^O !~ /(cygwin|MSWin|mingw)/) {
+    if ($^O !~ /(cygwin|MSWin32|mingw)/) {
 	print"1..0 # skip This module does only work on Windows\n";
 	exit 0;
     }
 };
 
-use Test::Simple tests => 8;
 use C::DynaLib;
 use sigtrap;
 
@@ -54,9 +55,10 @@ One final note about this file.  This is a demo/test program.  It is
 not necessarily good coding style.
 
 About DeclareSubA:
-Windows versions were consistent in their user32, gdi32.dll names.
+Previously Windows versions were consistent in their user32.dll,
+gdi32.dll function names.
 All names worked with the final A suffix.
-Now (XP and newer) the A function is not exported anymore.
+Now (XP and newer) the A function is sometimes not exported anymore.
 
 =cut
 
@@ -71,19 +73,26 @@ ok ($user32, "user32.dll loaded");
 my $gdi32 = new C::DynaLib("GDI32");
 ok ($gdi32, "gdi32.dll loaded");
 
-#typedef struct _WNDCLASS {    // wc
-#
-#    UINT    style;
-#    WNDPROC lpfnWndProc;
-#    int     cbClsExtra;
-#    int     cbWndExtra;
-#    HANDLE  hInstance;
-#    HICON   hIcon;
-#    HCURSOR hCursor;
-#    HBRUSH  hbrBackground;
-#    LPCTSTR lpszMenuName;
-#    LPCTSTR lpszClassName;
-#} WNDCLASS;
+if ($Convert::Binary::C::VERSION) {
+  C::DynaLib::Struct::Parse(<<CCODE);
+
+#include <windows.h>
+typedef struct _WNDCLASS {
+    UINT    style;
+    WNDPROC lpfnWndProc;
+    int     cbClsExtra;
+    int     cbWndExtra;
+    HANDLE  hInstance;
+    HICON   hIcon;
+    HCURSOR hCursor;
+    HBRUSH  hbrBackground;
+    LPCTSTR lpszMenuName;
+    LPCTSTR lpszClassName;
+} WNDCLASS;
+
+CCODE
+}
+
 Define C::DynaLib::Struct('WNDCLASS',
 	I => ['style'],
         I => ['lpfnWndProc'],
@@ -179,7 +188,8 @@ sub window_proc {
      ) {
     &$PostQuitMessage(0);
     return 0;
-  } elsif ($uMsg == 0x000F) {	# WM_PAINT
+  }
+  elsif ($uMsg == 0x000F) {	# WM_PAINT
     my $text = "Hello from Perl!  Please click somewhere into this window to continue...";
     # This should be big enough for a PAINTSTRUCT, I hope:
     my $ps = "\0" x 1024;
@@ -195,8 +205,8 @@ sub window_proc {
   return &$DefWindowProc($hwnd, $uMsg, $wParam, $lParam);
 }
 
-my $wnd_proc = new C::DynaLib::Callback(
-					\&window_proc, "i", "i", "i", "i", "i");
+my $wnd_proc = new C::DynaLib::Callback
+  (\&window_proc, "i", "i", "i", "i", "i");
 ok ($wnd_proc, "wnd_proc Callback declared");
 
 #
@@ -210,14 +220,15 @@ $rwc->lpfnWndProc($wnd_proc->Ptr());
 $rwc->hInstance(0x00400000);
 $rwc->cbClsExtra(0);
 $rwc->cbWndExtra(0);
+
 my $have_Win32 = eval { require Win32; 1; };
 my ($desc, $major, $minor, $build, $id) = $have_Win32 ? Win32::GetOSVersion() : (0,0,0,0,0);
-if ($major >= 5 and $minor >= 1) {
-  # FIXME: XP crashes with LoadIcon
+if (($major > 5) or ($major == 5 and $minor >= 1)) {
+  # FIXME: XP crashes with LoadIcon. Need Wide?
   $rwc->hIcon(0);
   $rwc->hCursor(0);
-  $rwc->hbrBackground(&$GetStockObject(0));  	# WHITE_BRUSH
-  #$rwc->hbrBackground(0);
+  #$rwc->hbrBackground(&$GetStockObject(0));  	# WHITE_BRUSH
+  $rwc->hbrBackground(0);
 } else {
   $rwc->hIcon(&$LoadIcon(0, 32512));     	# IDI_APPLICATION
   $rwc->hCursor(&$LoadCursor(0, 32512));	# IDI_ARROW
@@ -227,10 +238,16 @@ $rwc->lpszMenuName(0);
 $rwc->lpszClassName("w32test");
 ok ($rwc->lpszClassName, "rwc->lpszClassName");
 
-# &$UnregisterClass( $rwc->lpszClassName, 0x00400000 );
-unless (&$RegisterClass($wc)) {
-  &$UnregisterClass( $rwc->lpszClassName, 0x00400000 );
-  &$RegisterClass($wc) or die "can't register window class";
+if (($major > 5) or ($major == 5 and $minor >= 1)) {
+  ok 1;
+  exit;
+} else {
+  # &$UnregisterClass( $rwc->lpszClassName, 0x00400000 );
+  unless (&$RegisterClass($wc)) {
+    diag "can't register window class. try again unregistering before\n";
+    &$UnregisterClass( $rwc->lpszClassName, 0x00400000 );
+    &$RegisterClass($wc) or die "can't register window class";
+  }
 }
 
 #

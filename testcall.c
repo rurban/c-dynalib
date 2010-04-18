@@ -24,6 +24,7 @@
 #include <signal.h>
 #endif
 
+/* 3709D,9675A,3ACACB,359C46D6,5261433,FCA2D6,16FCF,4AA9C6,4A2CD24 */
 I32 a[] = { 225437, 616282, 3853003, 899434198, 86381619,
 	    16556758, 94159, 4893126, 77778212 };
 
@@ -55,10 +56,9 @@ int test(b0, b1, b2, b3, b4, b5, b6, b7, b8)
       && b6 == a[6]
       && b7 == a[7]
       && b8 == a[8]
-      )
-    {
+      ) {
       return 1;
-    }
+  }
   for (i = 0; i < 9; i++) {
     if (a[i] == b4) {
       if ((i == 0 || a[i-1] == b3) && (i == 8 || a[i+1] == b5)) {
@@ -143,26 +143,45 @@ int main(argc, argv)
   p2 = (int *) alloca(sizeof *p2); /* p1 - 0x20 */
   grows_downward = (p1 - p2 > 0 ? 1 : 0);
   one_by_one = (p1 - p2 == (grows_downward ? 1 : -1));
+#ifdef VERBOSE  
+  printf("grows_downward=%d,one_by_one=%d,p1-p2=%x\n",grows_downward,one_by_one,(int)(p1-p2));
+#endif
 
   one_arg = do_one_arg(NULL);
+#ifdef VERBOSE
+  printf("one_arg=%d,reverse=%d\n",one_arg,reverse);
+#endif
   if (reverse) {
     do_reverse = reverse ^ (one_by_one ? grows_downward : 0);
     one_arg = do_one_arg(NULL);
   }
   three_args = do_three_args(0, NULL, 0.0);
+#ifdef VERBOSE
+  printf("three_args=%d,adjust=[%d,%d]\n",three_args,adjust[0],adjust[1]);
+#endif
   if (! one_arg || ! three_args) {
     if (adjust[0] != 0 && adjust[0] == adjust[1]) {
       do_adjust = adjust[0];
       one_arg = do_one_arg(NULL);
       three_args = do_three_args(0, NULL, 0.0);
+#ifdef VERBOSE
+      printf("one_arg=%d,three_args=%d,adjust=[%d,%d]\n",one_arg,three_args,adjust[0],adjust[1]);
+#endif
     }
   }
+  /* try it a last time */
   if (! one_arg || ! three_args) {
     if (do_adjust != 0 && adjust[0] == adjust[1]) {
       do_adjust = (int)(p1 - p2);
-      adjust[0] = adjust[1] = do_adjust;
+      adjust[0] = adjust[1] = -do_adjust;
+#ifdef VERBOSE
+      printf("try adjust=[%d,%d]\n",adjust[0],adjust[1]);
+#endif
       one_arg = do_one_arg(NULL);
       three_args = do_three_args(0, NULL, 0.0);
+#ifdef VERBOSE
+      printf("one_arg=%d,three_args=%d,adjust=[%d,%d]\n",one_arg,three_args,adjust[0],adjust[1]);
+#endif
     }
   }
   if (one_arg && three_args) {
@@ -192,5 +211,8 @@ int main(argc, argv)
     fclose(fp);
     return 0;
   }
+#ifdef VERBOSE
+  printf("cdecl failed\n");
+#endif
   return 1;
 }

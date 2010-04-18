@@ -15,6 +15,14 @@ C::DynaLib::Struct - Tool for handling the C `struct' data type
 	[$template1, \@field_names1,]
 	... );
 
+  Parse C::DynaLib::Struct <<ENDC;
+  struct packet {
+    unsigned short header;
+    unsigned short flags;
+    unsigned char  payload[28];
+  };
+  ENDC
+
   $rstruct = tie( $struct, $struct_tag [, @initializer_list] );
   $value = $rstruct->my_field();
   $rstruct->my_field( $new_value );
@@ -74,6 +82,8 @@ right are some possible Perl equivalents.
 
 =head2 Define ( $new_class )
 
+=head2 Parse ( c-string or Convert::Binary::C object )
+
 =head1 BUGS
 
 Data member access is through autoloaded methods, so actual existing
@@ -88,11 +98,14 @@ machines.  Use caution when assigning C<pack> codes to C data types.
 
 =head1 SEE ALSO
 
-perlfunc(1) (for C<pack>), perlref(1), perltie(1).
+L<Convert::Binary::C>, L<perlfunc(1)> (for C<pack>), L<perlref(1)>, L<perltie(1)>.
 
 =cut
 
 use strict qw (vars subs);
+use vars qw($VERSION);
+$VERSION = '0.59';
+use subs qw(Define Parse);
 
 package C::DynaLib::Struct::Imp;
 
@@ -167,7 +180,6 @@ sub Unpack {
 package C::DynaLib::Struct;
 
 use Carp;
-use subs qw (Define);
 
 sub Define {
     my ($class, $new_class) = splice(@_, 0, 2);
@@ -195,6 +207,32 @@ sub Define {
     }
     *{"${new_class}::fieldno"} = \%fieldno;
     *{"${new_class}::template"} = \$template;
+}
+
+sub Parse {
+  my $definition = shift;
+  my $c;
+  require Convert::Binary::C;
+  Convert::Binary::C->import;
+  if (ref $definition eq 'Convert::Binary::C') {
+    $c = $definition;
+    $c->parse(@_);
+  } else {
+    require C::DynaLib::PerlTypes;
+    my $c = new Convert::Binary::C $C::DynaLib::PerlTypes::PerlTypes;
+    $c->parse($definition, @_);
+  }
+  # all structs and unions
+  for my $s ($c->compound) {
+    my $class = $s->identifier;
+    if (defined (${"${class}::template"})) {
+      carp "Redefinition of ".$s->type." $class";
+    }
+    my @members = $s->members;
+    Define C::DynaLib::Struct($class, $s->packnames, \@members);
+  }
+  use Data::Dumper;
+  print Dumper($c);
 }
 
 1;
