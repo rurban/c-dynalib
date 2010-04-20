@@ -1,13 +1,14 @@
+# -*- perl -*-
 use Test;
 ###### tested on ix86 machines
 BEGIN {
-    use Config;
-    if ($Config{archname} !~ /i\d?86|cygwin-/) {
-	print"1..0 # skip This test only works with Intel CPUs\n";
-	exit 0;
-    } else {
-      plan tests => 1
-    }
+  use Config;
+  if ($Config{archname} !~ /[ix]\d?86|cygwin-/) {
+    print"1..0 # skip This test only works with Intel CPUs\n";
+    exit 0;
+  } else {
+    plan tests => 1;
+  }
 };
 
 use C::DynaLib;

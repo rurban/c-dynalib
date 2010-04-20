@@ -1,6 +1,10 @@
 Revision history for Perl extension C::DynaLib 
 (formerly ExtUtils::DynaLib, very formerly CLib).
 
+0.60  2010-04-20 23:55:12 rurban
+        Improve library search and windows resolution:
+          know about their libc, try dllimport on importlibs.
+
 0.59  2010-04-18 15:55:36 rurban
 	Added C::DynaLib::Struct->Parse with the help of 
 	  Convert::Binary::C struct parser.

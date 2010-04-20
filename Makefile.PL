@@ -449,8 +449,10 @@ sub append_convert_defines_cdecl {
 typedef unsigned char uchar;
 typedef char *        char_p;
 typedef unsigned int  uint;
+/*
 typedef unsigned Quad_t  uQuad_t;
 typedef long long  longlong;
+*/
 
 enum {
   TR_int,
@@ -478,12 +480,16 @@ typedef union {
   U32           v_U32;
   U16           v_U16;
   uchar         v_uchar;
+/*
   Quad_t        v_Quad_t;
   uQuad_t       v_uQuad_t;
+*/
   float         v_float;
   double        v_double;
   char_p        v_char_p;
+/*
   longlong      v_longlong;
+*/
 } ret_stru;
 
 CDECL_H

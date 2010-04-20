@@ -2,7 +2,7 @@
 use Test::More tests => 8;
 # Win32/cygwin/mingw tests only
 BEGIN {
-    if ($^O !~ /(cygwin|MSWin32|mingw)/) {
+    if ($^O !~ /(cygwin|MSWin32)/) {
 	print"1..0 # skip This module does only work on Windows\n";
 	exit 0;
     }

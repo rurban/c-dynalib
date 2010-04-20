@@ -12,10 +12,11 @@ use warnings;
 no strict 'refs';
 use Carp;
 #use Convert::Binary::C;
+use Config;
 use vars qw($VERSION @ISA $AUTOLOAD @EXPORT @EXPORT_OK);
 use vars qw($GoodRet $DefConv $decl);
 use subs qw(AUTOLOAD new LibRef DESTROY DeclareSub);
-$VERSION = '0.59';
+$VERSION = '0.60';
 
 # inline-able constants?
 sub DYNALIB_DEFAULT_CONV ();
@@ -30,6 +31,9 @@ require Exporter;
 @ISA = qw(DynaLoader Exporter);
 
 bootstrap C::DynaLib $VERSION, \$C::DynaLib::Callback::Config;
+
+#sub dl_findfile { DynaLoader::dl_findfile(@_) }
+#sub dl_load_file { DynaLoader::dl_load_file(@_) }
 
 $GoodRet = '(?:[ilscILSCfdp'.(PTR_TYPE eq 'q'?'qQ':'').']?|P\d+)';
 
@@ -46,13 +50,66 @@ $DefConv = DYNALIB_DEFAULT_CONV;
 
 sub new {
   my $class = shift;
-  my $libname = shift;
+  my $libname = $_ = shift;
   scalar(@_) <= 1
     or croak 'Usage: $lib = new C::DynaLib( $filename [, $flags] )';
   my $so = $libname;
   -e $so or $so = DynaLoader::dl_findfile($libname) || $libname;
-  my $lib = DynaLoader::dl_load_file($so, @_)
-    or return undef;
+  my $lib;
+  $lib = DynaLoader::dl_load_file($so, @_) unless $so =~ /\.a$/;
+  if (!$lib) {
+    # XXX Duplicate most of the DynaLoader code, since DynaLoader is
+    # not ready to find MSWin32 dll's.
+    if ($^O =~ /MSWin32|cygwin/) {
+      my ($found, @dirs, @names, @dl_library_path);
+      my $lib = $libname;
+      $lib =~ s/^-l//;
+      if ($^O eq 'cygwin' and $lib =~ m{^(c|m|pthread|/usr/lib/libc\.a)$}) {
+        $lib = DynaLoader::dl_load_file("/bin/cygwin1.dll", @_);
+        return bless \$lib, $class;
+      }
+      if ($^O eq 'MSWin32' and $lib =~ /^(c|m|msvcrt)$/) {
+        if ($lib = DynaLoader::dl_load_file($ENV{SYSTEMROOT}."\\System32\\MSVCRT.DLL", @_)) {
+          return bless \$lib, $class;
+        }
+        push(@names, "MSVCRT.DLL","MSVCRT90","MSVCRT80","MSVCRT71","MSVCRT70",
+             "MSVCRT60","MSVCRT40","MSVCRT20");
+      }
+      # Either a dll if there exists a unversioned dll,
+      # or the import lib points to the versioned dll.
+      push(@dirs, "/lib", "/usr/lib", "/usr/bin/", "/usr/local/bin")
+        unless $^O eq 'MSWin32';
+      push(@dirs, $ENV{SYSTEMROOT}."\\System32", $ENV{SYSTEMROOT}, ".")
+        if $^O eq 'MSWin32';
+      push(@names, "cyg$_.dll", "lib$_.dll.a") if $^O eq 'cygwin';
+      push(@names, "$_.dll", "lib$_.a") if $^O eq 'MSWin32';
+      push(@names, "lib$_.so", "lib$_.a");
+      my $pthsep = $Config::Config{path_sep};
+      push(@dl_library_path, split(/$pthsep/, $ENV{LD_LIBRARY_PATH} || ""))
+        unless $^O eq 'MSWin32';
+      push(@dirs, split(/$pthsep/, $ENV{PATH}));
+    LOOP:
+      for my $name (@names) {
+        for my $dir (@dirs, @dl_library_path) {
+          next unless -d $dir;
+          my $file = File::Spec->catfile($dir,$name);
+          if (-f $file) {
+            $found = $file;
+            last LOOP;
+          }
+        }
+      }
+      if ($found) {
+        $found = system("dllimport -I $found") if $found =~ /\.a$/;
+        $lib = DynaLoader::dl_load_file($found, @_);
+      }
+    }
+    # last ressort, try $so which might trigger a Windows MessageBox.
+    unless ($lib) {
+      $lib = DynaLoader::dl_load_file($so, @_) if $so;
+      return undef unless $lib;
+    }
+  }
   bless \$lib, $class;
 }
 
@@ -103,7 +160,6 @@ sub DeclareSub {
   }
 
   unless ($ptr) {
-
     # No pointer, so we're looking up the function in a library...
     $libref ||= $is_method && $self->LibRef()
       or croak 'C::DynaLib::DeclareSub: non-method form requires a "ptr" or "libref"';
@@ -152,14 +208,15 @@ sub DeclareSub {
 
 sub Parse {
   my $definition = shift;
+  warn "C::DynaLib::Parse for functions not yet implemented";
   my $c;
-  require Convert::Binary::C;
-  Convert::Binary::C->import;
   if (ref $definition eq 'Convert::Binary::C') {
     $c = $definition;
     $c->parse(@_);
   } else {
     require C::DynaLib::PerlTypes;
+    require Convert::Binary::C;
+    Convert::Binary::C->import();
     my $c = new Convert::Binary::C $C::DynaLib::PerlTypes::PerlTypes;
     $c->parse($definition, @_);
   }
@@ -342,6 +399,11 @@ Alternatively, a linker command-line argument (e.g., C<"-lc">) may be
 specified.  See L<DynaLoader(3)> for details on how such arguments are
 mapped to file names.
 
+Note: On cygwin or mingw the import library F</usr/lib/libC<lt>nameC<gt>.dll.a>
+contains the name of the .dll, so -lC<lt>nameC<gt> is enough, and you don't
+have to use the versioned name of the dll. C<dllimport -I lib>
+prints the dll name.
+
 On failure, C<new> returns C<undef>.  Error information I<might> be
 obtainable by calling C<DynaLoader::dl_error()>.
 
@@ -441,10 +503,12 @@ form of C<DeclareSub> in order to specify this argument.
 
 =back
 
-=head2 Parse( '<<EOS' ) - Parse macro, function and struct declarations
+=head2 ->Parse( '<<EOS' ) - Parse macro, function and struct declarations
 
 The argument may be c-string (best done via '<<EOS' ... EOS)
 or a Convert::Binary::C object.
+
+NYI for funcs. Only C::DynaLib::Struct->Parse is implemented yet.
 
 =head2 Calling a declared function
 

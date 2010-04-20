@@ -144,12 +144,13 @@ int main(argc, argv)
   grows_downward = (p1 - p2 > 0 ? 1 : 0);
   one_by_one = (p1 - p2 == (grows_downward ? 1 : -1));
 #ifdef VERBOSE  
-  printf("grows_downward=%d,one_by_one=%d,p1-p2=%x\n",grows_downward,one_by_one,(int)(p1-p2));
+  printf("grows_downward=%d,one_by_one=%d,p1-p2=%d\n",grows_downward,one_by_one,
+         (sizeof(int*))*((int)(p1 - p2)));
 #endif
 
   one_arg = do_one_arg(NULL);
 #ifdef VERBOSE
-  printf("one_arg=%d,reverse=%d\n",one_arg,reverse);
+  printf("one_arg=%d,reverse=%d,adjust=[%d,%d]\n",one_arg,reverse,adjust[0],adjust[1]);
 #endif
   if (reverse) {
     do_reverse = reverse ^ (one_by_one ? grows_downward : 0);
@@ -169,10 +170,10 @@ int main(argc, argv)
 #endif
     }
   }
-  /* try it a last time */
+  /* try it a last time by forcing adjust */
   if (! one_arg || ! three_args) {
     if (do_adjust != 0 && adjust[0] == adjust[1]) {
-      do_adjust = (int)(p1 - p2);
+      do_adjust = (sizeof(int*))*((int)(p1 - p2));
       adjust[0] = adjust[1] = -do_adjust;
 #ifdef VERBOSE
       printf("try adjust=[%d,%d]\n",adjust[0],adjust[1]);
