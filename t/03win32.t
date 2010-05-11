@@ -1,5 +1,4 @@
 # -*- perl -*-
-use Test::More tests => 8;
 # Win32/cygwin/mingw tests only
 BEGIN {
     if ($^O !~ /(cygwin|MSWin32)/) {
@@ -7,6 +6,7 @@ BEGIN {
 	exit 0;
     }
 };
+use Test::More tests => 8;
 
 use C::DynaLib;
 use sigtrap;

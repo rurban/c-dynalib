@@ -16,11 +16,11 @@ testreverse.c
 lib/C/DynaLib/PerlTypes.pm
 lib/C/DynaLib/Struct.pm
 Asm-0.01.tar.gz
+script/hparse.pl
 script/pl2exe.pl
 t/01test.t
 t/02struct.t
 t/03win32.t
 t/04asmcall.t
-#t/09distribution.t
-t/stdio.pl
+t/09distribution.t
 META.yml                                 Module meta-data (added by MakeMaker)

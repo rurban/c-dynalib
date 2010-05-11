@@ -104,7 +104,7 @@ L<Convert::Binary::C>, L<perlfunc(1)> (for C<pack>), L<perlref(1)>, L<perltie(1)
 
 use strict qw (vars subs);
 use vars qw($VERSION);
-$VERSION = '0.59';
+$VERSION = '0.60';
 use subs qw(Define Parse);
 
 package C::DynaLib::Struct::Imp;

@@ -58,8 +58,13 @@ for (@ARGV) {
 @ARGV = grep { !/^(DECL=|CALLBACKS=(\d+)$|-D.)/ } @ARGV;
 
 $archname = $Config{archname};
+# cc can also be gcc
+if (!$is_gcc and $Config{cc} =~ /^cc/) {
+  my $test = `$Config{cc} -dumpversion`;
+  $is_gcc=1 if $test and $test eq $Config{gccversion}."\n";
+}
 # TODO: support for the ia64 fastcall derivate (first four in regs, rest in args)
-# -fstack-protector adds 32 bytes. $CDECL_ADJUST = -32
+#       -fstack-protector adds 32 bytes. $CDECL_ADJUST = -32
 unless (@convention) {
     for (
 	 #[ '^i?[x3-6]86', sub {'cdecl'} ],
@@ -75,7 +80,7 @@ unless (@convention) {
 			}
 			'alpha'} ],
 	 #[ 'win32', sub {'cdecl'} ],
-	 # [ '^cygwin-thread-multi-64int', sub {my $CDECL_ADJUST = -32; 'cdecl'} ],
+	 #[ '^cygwin-thread-multi-64int', sub {my $CDECL_ADJUST = -32; 'cdecl'} ],
 	 [ '', sub { () } ],
 	 )
     { @convention = &{$_->[1]}, last if $archname =~ /$_->[0]/i }
@@ -88,7 +93,7 @@ if ($^O eq 'MSWin32' and $Config{cc} =~ /^cl/i) {
 } elsif ($Config{optimize} =~ /[\-\/]O\w/)  {
     $optimize =~ s/O\w/O0/;
 }
-if ($Config{cc} eq 'gcc' and $Config{ccflags} =~ /-DDEBUGGING/) {
+if ($is_gcc and $Config{ccflags} =~ /-DDEBUGGING/) {
     $optimize .= " -g";
 }
 
@@ -106,11 +111,10 @@ WriteMakefile(
     'OPTIMIZE'	=> $optimize,
 
     'PREREQ_PM' => {
-        'Convert::Binary::C' => 0.70,
-        #'GCC::TranslationUnit' => 0,
-        'Test'       => 0,
-        'Test::Simple' => 0,
-        'Test::More' => 0,
+        'Convert::Binary::C'   => 0.70, # 0.70 structs only
+	($is_gcc ? ('GCC::TranslationUnit' => 0) : ()),
+        'Test'         => 0,
+        'Test::More'   => 0,
     },
     ($] >= 5.005 ?
      ('AUTHOR' => 'John Tobey <John.Tobey@gmail.com>, Reini Urban <rurban@cpan.org>',
@@ -279,6 +283,8 @@ sub guess_cdecl_h {
     my $defines;
     for $defines ("-DINCLUDE_ALLOCA", "", "-DINCLUDE_MALLOC") {
 	my $cmd = $self->{how_to_compile};
+	$defines .= " -g" if $is_gcc;
+	$defines .= " -DVERBOSE" if $Verbose;
 	$cmd =~ s/-DNARF/$defines/g;
 	unlink ("testreverse$self->{EXE_EXT}", $cdecl_h);
 	print "$cmd\n" if $Verbose;
@@ -423,6 +429,8 @@ sub write_cdecl_h {
     for $defines ("-DINCLUDE_ALLOCA", "", "-DINCLUDE_MALLOC") {
 	my $cmd = $self->{how_to_compile};
 	$cmd =~ s/-DNARF/$defines/g;
+	$cmd .= " -g" if $is_gcc;
+	$cmd .= " -DVERBOSE" if $Verbose;
 	unlink ("testcall$self->{EXE_EXT}", $cdecl_h);
 	print "$cmd\n" if $Verbose;
 	system ($cmd);
@@ -449,10 +457,6 @@ sub append_convert_defines_cdecl {
 typedef unsigned char uchar;
 typedef char *        char_p;
 typedef unsigned int  uint;
-/*
-typedef unsigned Quad_t  uQuad_t;
-typedef long long  longlong;
-*/
 
 enum {
   TR_int,
@@ -464,11 +468,10 @@ enum {
   TR_U16,
   TR_uchar,
   TR_Quad_t,
-  TR_uQuad_t,
+  TR_Uquad_t,
   TR_float,
   TR_double,
   TR_char_p,
-  TR_longlong
 };
 
 typedef union {
@@ -480,16 +483,13 @@ typedef union {
   U32           v_U32;
   U16           v_U16;
   uchar         v_uchar;
-/*
+#ifdef HAS_QUAD
   Quad_t        v_Quad_t;
-  uQuad_t       v_uQuad_t;
-*/
+  Uquad_t       v_Uquad_t;
+#endif
   float         v_float;
   double        v_double;
   char_p        v_char_p;
-/*
-  longlong      v_longlong;
-*/
 } ret_stru;
 
 CDECL_H
@@ -569,7 +569,7 @@ ${convention}_call_packed(symref, ret_type, ...)
 	      sv_setnv(sv, (double)aquad);
 	    break;
 	  case 'Q' :
-	    aquad = ${convention}_CALL(symref, uQuad_t);
+	    aquad = ${convention}_CALL(symref, Uquad_t);
 	    if (aquad <= UV_MAX)
 	      sv_setuv(sv, (UV)auquad);
 	    else
@@ -656,7 +656,7 @@ FUNCS
 
 sub parse_perl_types
 {
-  unless (eval "use Convert::Binary::C;") {
+  unless (eval "require Convert::Binary::C;") {
     print "Warning: Convert::Binary::C not installed. PerlTypes not generated.\n";
     return;
   }

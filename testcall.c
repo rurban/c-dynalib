@@ -24,7 +24,8 @@
 #include <signal.h>
 #endif
 
-/* 3709D,9675A,3ACACB,359C46D6,5261433,FCA2D6,16FCF,4AA9C6,4A2CD24 */
+/*          0003709D,0009675A,003ACACB,359C46D6,05261433,
+            00FCA2D6,00016FCF,004AA9C6,04A2CD24 */
 I32 a[] = { 225437, 616282, 3853003, 899434198, 86381619,
 	    16556758, 94159, 4893126, 77778212 };
 
@@ -39,6 +40,7 @@ int do_adjust = 0;
 int *which;
 
 void handler(int sig) {
+  printf("abnormal exit 1\n");
   exit(1);
 }
 
@@ -57,6 +59,9 @@ int test(b0, b1, b2, b3, b4, b5, b6, b7, b8)
       && b7 == a[7]
       && b8 == a[8]
       ) {
+#ifdef VERBOSE
+      printf("test ok\n");
+#endif
       return 1;
   }
   for (i = 0; i < 9; i++) {
@@ -139,49 +144,65 @@ int main(argc, argv)
 #ifdef SIGILL
   signal(SIGILL, handler);
 #endif
+  if (argc > 1) {
+    do_adjust = atoi(argv[1]);
+  }
   p1 = (int *) alloca(sizeof *p1);
   p2 = (int *) alloca(sizeof *p2); /* p1 - 0x20 */
   grows_downward = (p1 - p2 > 0 ? 1 : 0);
   one_by_one = (p1 - p2 == (grows_downward ? 1 : -1));
 #ifdef VERBOSE  
-  printf("grows_downward=%d,one_by_one=%d,p1-p2=%d\n",grows_downward,one_by_one,
-         (sizeof(int*))*((int)(p1 - p2)));
+  printf("p1-p2=%d,do_adjust=%d,grows_downward=%d,one_by_one=%d\n",
+	 (char*)p1-(char*)p2,do_adjust,grows_downward,one_by_one);
 #endif
 
+  /* compute adjust[0] and reverse */
   one_arg = do_one_arg(NULL);
 #ifdef VERBOSE
-  printf("one_arg=%d,reverse=%d,adjust=[%d,%d]\n",one_arg,reverse,adjust[0],adjust[1]);
+  printf("one_arg=%d,reverse=%d,adjust=[%d,%d]\n",
+	 one_arg,reverse,adjust[0],adjust[1]);
 #endif
   if (reverse) {
     do_reverse = reverse ^ (one_by_one ? grows_downward : 0);
+    /* try with computed adjust[0] and reverse */
     one_arg = do_one_arg(NULL);
+#ifdef VERBOSE
+    printf("do_reverse=%d,adjust=[%d,%d]\n",
+	    do_reverse,adjust[0],adjust[1]);
+#endif
   }
+
+  /* verify and compute adjust[1] for more args */
+  do_adjust = adjust[0];
   three_args = do_three_args(0, NULL, 0.0);
 #ifdef VERBOSE
   printf("three_args=%d,adjust=[%d,%d]\n",three_args,adjust[0],adjust[1]);
 #endif
+  /* adjust[1] maybe different? */
   if (! one_arg || ! three_args) {
-    if (adjust[0] != 0 && adjust[0] == adjust[1]) {
+    if (adjust[0] != 0) {
       do_adjust = adjust[0];
       one_arg = do_one_arg(NULL);
       three_args = do_three_args(0, NULL, 0.0);
 #ifdef VERBOSE
-      printf("one_arg=%d,three_args=%d,adjust=[%d,%d]\n",one_arg,three_args,adjust[0],adjust[1]);
+      printf("do_adjust=%d,one_arg=%d,three_args=%d,adjust=[%d,%d],do_adjust=%d\n",
+	     do_adjust,one_arg,three_args,adjust[0],adjust[1],do_adjust);
 #endif
     }
   }
-  /* try it a last time by forcing adjust */
+  /* try it a last time by forcing adjust to offset */
   if (! one_arg || ! three_args) {
-    if (do_adjust != 0 && adjust[0] == adjust[1]) {
-      do_adjust = (sizeof(int*))*((int)(p1 - p2));
-      adjust[0] = adjust[1] = -do_adjust;
+      /*for (do_adjust=-32; do_adjust <=32; do_adjust+=4) {*/
+      do_adjust = (char*)p2 - (char*)p1;
+      adjust[0] = adjust[1] = do_adjust;
 #ifdef VERBOSE
       printf("try adjust=[%d,%d]\n",adjust[0],adjust[1]);
 #endif
       one_arg = do_one_arg(NULL);
       three_args = do_three_args(0, NULL, 0.0);
 #ifdef VERBOSE
-      printf("one_arg=%d,three_args=%d,adjust=[%d,%d]\n",one_arg,three_args,adjust[0],adjust[1]);
+      printf("one_arg=%d,three_args=%d,adjust=[%d,%d],reverse=%d\n",
+	     one_arg,three_args,adjust[0],adjust[1],reverse);
 #endif
     }
   }

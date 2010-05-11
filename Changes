@@ -1,6 +1,15 @@
 Revision history for Perl extension C::DynaLib 
 (formerly ExtUtils::DynaLib, very formerly CLib).
 
+0.61  2010-05-10 rurban
+	Fix t/win32.t
+	Better detect gcc
+	Improve perl Makefile.PL Verbose
+	Added experimental script/hparse.pl header parser
+        removed Test::Simple dependency
+	added github repo
+	fix Quad issues introduced with 0.59
+
 0.60  2010-04-20 23:55:12 rurban
         Improve library search and windows resolution:
           know about their libc, try dllimport on importlibs.

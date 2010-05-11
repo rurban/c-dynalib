@@ -16,7 +16,7 @@ use Config;
 use vars qw($VERSION @ISA $AUTOLOAD @EXPORT @EXPORT_OK);
 use vars qw($GoodRet $DefConv $decl);
 use subs qw(AUTOLOAD new LibRef DESTROY DeclareSub);
-$VERSION = '0.60';
+$VERSION = '0.61';
 
 # inline-able constants?
 sub DYNALIB_DEFAULT_CONV ();
@@ -208,6 +208,7 @@ sub DeclareSub {
 
 sub Parse {
   my $definition = shift;
+  # we might want to use GCC-TranslationUnit instead
   warn "C::DynaLib::Parse for functions not yet implemented";
   my $c;
   if (ref $definition eq 'Convert::Binary::C') {
@@ -225,6 +226,7 @@ sub Parse {
     my $class = $s->identifier;
     C::DynaLib::Struct::Parse($s->sourcify);
   }
+  # XXX
   use Data::Dumper;
   print Dumper($c);
 }
@@ -387,6 +389,7 @@ may even compile and run a test program before the module is built.
 This module is divided into two packages, C<C::DynaLib> and
 C<C::DynaLib::Callback>.  Each makes use of Perl objects (see
 L<perlobj>) and provides its own constructor.
+See also L<C::DynaLib::Struct> for easy struct accessors.
 
 A C<C::DynaLib> object corresponds to a dynamic library whose
 functions are available to Perl.  A C<C::DynaLib::Callback> object

@@ -1,25 +1,10 @@
-This is C::DynaLib, a Perl 5 module for calling C functions.
+This is C::DynaLib, a Perl 5 FFI for calling C functions.
 Example:
 
   use C::DynaLib;
   $libm = new C::DynaLib("-lm");
   $sinh = $libm->DeclareSub("sinh", "d", "d");
   print "The hyperbolic sine of 3 is ", &$sinh(3), "\n";
-
-
-	***********************************************************
-	***   THIS CODE CONTAINS SYSTEM DEPENDENCIES.           ***
-	***   IT WILL NOT WORK ON ALL COMPILERS, MACHINES, OR   ***
-	***   OPERATING SYSTEMS.        USE AT YOUR OWN RISK.   ***
-	***********************************************************
-
-
-	***********************************************************
-	***   A BETTER WAY TO INTERFACE TO C CODE IS WITH XS.   ***
-	***   PLEASE READ THE "perlxs" DOCUMENTATION BEFORE     ***
-	***   MAKING EXTENSIVE USE OF THIS MODULE.              ***
-	***********************************************************
-
 
 The module has been tested successfully on iX86, Sparc, and Alpha
 machines.  However, there are probably compilers for even these chips
@@ -29,9 +14,10 @@ Included are the following packages:
 
   C::DynaLib            - call a C function from Perl
   C::DynaLib::Callback  - convert a perl sub into a usable
-                                     C function pointer
-  C::DynaLib::Struct    - yet another tool for handling C
-                                     compound data structures
+                          C function pointer
+  C::DynaLib::Struct    - handle C records nicely. The declaration can be 
+			  created automatically from .h excerpts if 
+			  Convert::Binary::C is installed
   Asm                   - unsupported whimsical i386 CPU interface
                                      (not installed by default)
 
@@ -45,6 +31,9 @@ variety.  Be sure you answered "y" when Configure asked, "Do you wish
 to use dynamic loading?".  Otherwise, you will still (I think) be able
 to create callback pointers and convert a function pointer into a Perl
 sub, but you won't be able to do dynamic loading.
+
+gcc stack adjustment changed with gcc-4. This is not fixed yet, so
+hack30 must be used.
 
 The biggest issue in porting this module is your system's function
 call interface.  If Makefile.PL prints that it is using `hack30', it
@@ -67,5 +56,5 @@ in the top-level Perl source directory for more information.
 
 Enjoy!
 -John
-jtobey@john-edwin-tobey.org
-and Reini Urban <rurban@cpan.org>
+jtobey@john-edwin-tobey.org and 
+Reini Urban <rurban@cpan.org>
