@@ -32,9 +32,11 @@ void *func;
 
   for (i = items; i-- > DYNALIB_ARGSTART; ) {
     (void) SvPV(ST(i), arg_len);
+    /* XXX CDECL_ARG_ALIGN=8 for amd64 */
     total_arg_len += arg_len;
   }
-  arg_on_stack = (char *) alloca(total_arg_len) + CDECL_ADJUST;
+  arg_on_stack = (char *) alloca(total_arg_len);
+  arg_on_stack += CDECL_ADJUST;
 #if CDECL_REVERSE
   for (i = items - 1; i >= DYNALIB_ARGSTART; i--) {
 #else  /* ! CDECL_REVERSE */
@@ -42,6 +44,7 @@ void *func;
 #endif  /* ! CDECL_REVERSE */
     arg_scalar = SvPV(ST(i), arg_len);
     Copy(arg_scalar, arg_on_stack, arg_len, char);
+    /* XXX CDECL_ARG_ALIGN=8 for amd64 */
     arg_on_stack += arg_len;
   }
 #endif  /* ! CDECL_ONE_BY_ONE */

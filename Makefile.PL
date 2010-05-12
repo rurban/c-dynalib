@@ -4,10 +4,10 @@ use strict;
 require 5.002;
 use Config;
 
-my($archname, @convention, $convention,
+my(@convention, $convention,
    $num_callbacks, %cflags, $object, $devnull,
    $conv_xs, $cbfunc_c, $cdecl_h, $postamble,
-   $is_gcc, $is_borland, $is_dynamic, $Verbose);
+   $is_gcc, $is_msvc, $is_borland, $is_dynamic, $Verbose);
 
 # $Verbose = 1;
 $conv_xs = "conv.xsi";
@@ -16,6 +16,7 @@ $cdecl_h = "cdecl.h";
 $object = '$(BASEEXT)$(OBJ_EXT)';
 
 $is_gcc = $Config{cc} =~ /gcc/i && $Config{gccversion} >= 2;
+$is_msvc = ($^O eq 'MSWin32' and $Config{cc} =~ /^cl/i);
 $is_borland = $Config{cc} =~ /\bbcc/i;
 $is_dynamic = ($Config{usedl} eq 'define');
 use subs qw(write_conv write_cbfunc write_cdecl_h is_big_endian check_ieee_fp);
@@ -57,7 +58,8 @@ for (@ARGV) {
 # Appease MakeMaker:
 @ARGV = grep { !/^(DECL=|CALLBACKS=(\d+)$|-D.)/ } @ARGV;
 
-$archname = $Config{archname};
+my $ccflags = $Config{ccflags};
+my $archname = $Config{archname};
 # cc can also be gcc
 if (!$is_gcc and $Config{cc} =~ /^cc/) {
   my $test = `$Config{cc} -dumpversion`;
@@ -88,12 +90,13 @@ unless (@convention) {
 
 # Disable cc optimization on non-gcc compilers
 my $optimize = $Config{optimize};
-if ($^O eq 'MSWin32' and $Config{cc} =~ /^cl/i) {
+if ($is_msvc) {
     $optimize = '/Od';
+    $ccflags =~ s|[-/]O\d ||;
 } elsif ($Config{optimize} =~ /[\-\/]O\w/)  {
     $optimize =~ s/O\w/O0/;
 }
-if ($is_gcc and $Config{ccflags} =~ /-DDEBUGGING/) {
+if ($is_gcc and $ccflags =~ /-DDEBUGGING/) {
     $optimize .= " -g";
 }
 
@@ -119,6 +122,24 @@ WriteMakefile(
     ($] >= 5.005 ?
      ('AUTHOR' => 'John Tobey <John.Tobey@gmail.com>, Reini Urban <rurban@cpan.org>',
       'ABSTRACT_FROM' => 'lib/C/DynaLib.pm') : ()),
+    ($ExtUtils::MakeMaker::VERSION gt '6.46' ?
+    ('META_MERGE'
+     => {"recommends" =>
+	 {
+	  "GCC::TranslationUnit" => "1.00",
+	  "Convert::Binary::C" => "0.70",
+	 },
+	 resources =>
+	 {
+	  license     => 'http://dev.perl.org/licenses/',
+	  repository  => 'http://github.com/rurban/c-dynalib',
+	 },
+	}
+    ) : ()),
+    clean => { FILES =>
+ 	       "*.core *.stackdump *.exe test*.ilk test*.obj test*.pdb test*.pdb vc*.pdb ".
+               "*.err *.bak *.o dll.base dll.exp"
+             },
 );
 
 
@@ -236,15 +257,15 @@ int main()
 PROG
     close PROG;
 
-    my $ccflags = $Config{ccflags};
     @candidate = ();
     $devnull = $^O eq 'MSWin32' ? "> NUL" : ">/dev/null 2>&1";
-    push @candidate, "$Config{cc} $Config{ccflags} -DNARF -I$self->{PERL_INC} testtest.c -o testtest$self->{EXE_EXT} $devnull"
+    my $cmd1 = "$Config{cc} $ccflags $optimize -DNARF -I$self->{PERL_INC} testtest.c";
+    push @candidate, "$cmd1 -o testtest$self->{EXE_EXT} $devnull"
 	unless $Verbose;
-    push @candidate, "$Config{cc} $Config{ccflags} -DNARF -I$self->{PERL_INC} testtest.c -otesttest$self->{EXE_EXT} $devnull"
+    push @candidate, "$cmd1 -otesttest$self->{EXE_EXT} $devnull"
 	unless $Verbose;
-    push @candidate, "$Config{cc} $Config{ccflags} -DNARF -I$self->{PERL_INC} testtest.c -o testtest$self->{EXE_EXT}";
-    push @candidate, "$Config{cc} $Config{ccflags} -DNARF -I$self->{PERL_INC} testtest.c -otesttest$self->{EXE_EXT}";
+    push @candidate, "$cmd1 -o testtest$self->{EXE_EXT}";
+    push @candidate, "$cmd1 -otesttest$self->{EXE_EXT}";
 
     while ($self->{how_to_compile} = shift (@candidate)) {
 	unlink "testtest$self->{EXE_EXT}";
@@ -256,11 +277,11 @@ PROG
 
     @candidate = ();
     push @candidate, "./testtest$self->{EXE_EXT} $devnull"
-	unless $Verbose;
+	if !$is_msvc and !$Verbose;
     push @candidate, "testtest$self->{EXE_EXT} $devnull"
 	unless $Verbose;
     push @candidate, "testtest$self->{EXE_EXT}";
-    push @candidate, "./testtest$self->{EXE_EXT}";
+    push @candidate, "./testtest$self->{EXE_EXT}" if !$is_msvc;
     push @candidate, "run testtest$self->{EXE_EXT}";
 
     unlink ("testtest.txt");
@@ -443,6 +464,9 @@ sub write_cdecl_h {
 		print "Succeeded.\n" if $Verbose;
 		return 1;
 	    }
+	    # compiled okay and executable: no need to try the two
+	    # other options no header and malloc
+	    last;
 	}
     }
     return undef;
