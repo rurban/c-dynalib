@@ -1,6 +1,6 @@
 /*
  * This program tries to generate an appropriate header file for
- * inclusion with cdecl.c.
+ * inclusion with cdecl.c or cdecl3.c.
  */
 
 #define main notmain
@@ -24,6 +24,12 @@
 #include <signal.h>
 #endif
 
+#ifdef VERBOSE
+#define debprintf(x) printf x
+#else
+#define debprintf(x)
+#endif
+
 /*          0003709d,0009675a,003acacb,359c46d6,05261433,
             00fca2d6,00016fcf,004aa9c6,04a2cd24 */
 I32 a[] = { 225437, 616282, 3853003, 899434198, 86381619,
@@ -31,9 +37,10 @@ I32 a[] = { 225437, 616282, 3853003, 899434198, 86381619,
 
 int grows_downward;
 int reverse = 0;
-int stack_reserve = 0; /* .space private data on top of call stack added later, 
+int stack_reserve = 0; /* cdecl3: private data on top of call stack added later, 
 			  cannot not be overwritten with alloca.
-			  New gcc ABI places in the 4 ptrs 3 unwritable ptr here, on 32+64bit */
+			  New gcc ABI places in the 4 ptrs 3 unwritable ptr here, 
+			  on 32+64bit */
 int stack_align;       /* diff between two alloca's */
 int one_by_one = 1;    /* stack_align = 1 pointer */
 int arg_align = sizeof(I32); /* size of an I32 arg on the call stack. 4 or 8 */
@@ -46,7 +53,8 @@ int *which;
 
 void handler(int sig) {
   printf("abnormal exit 1\n");
-  exit(1);
+  /*if (!stack_reserve)*/
+    exit(1);
 }
 
 int test(b0, b1, b2, b3, b4, b5, b6, b7, b8)
@@ -54,9 +62,8 @@ int test(b0, b1, b2, b3, b4, b5, b6, b7, b8)
 {
   int i;
 
-#ifdef VERBOSE
-  printf("do_adjust=%d\n",do_adjust); 
-#endif
+  debprintf(("test: do_adjust=%d, stack_reserve=%d\n",
+	     do_adjust, stack_reserve)); 
   if (b0 == a[0]
       && b1 == a[1]
       && b2 == a[2]
@@ -67,41 +74,37 @@ int test(b0, b1, b2, b3, b4, b5, b6, b7, b8)
       && b7 == a[7]
       && b8 == a[8]
       ) {
-#ifdef VERBOSE
-      printf("test ok\n");
-#endif
+    debprintf(("test ok\n"));
       return 1;
   }
-#ifdef VERBOSE
-  printf("b0-8: %08x,%08x,%08x,%08x,%08x,%08x,%08x,%08x,%08x\n", 
-	 b0,b1,b2,b3,b4,b5,b6,b7,b8);
-#endif
-  /* gcc-3.4 amd64: do_adjust=-24, stack_reserve=6 (3 ptrs) */
+  debprintf(("b0-8: %08x,%08x,%08x,%08x,%08x,%08x,%08x,%08x,%08x\n", 
+	     b0,b1,b2,b3,b4,b5,b6,b7,b8));
+  /* cdecl3 tests: */
+  /* gcc-3.4 amd64: do_adjust=-24, stack_reserve=3 (3 ptrs) */
   if ((sizeof(int*) == 8) && (a[0] == b6) && (a[2] == b7)) {
     *which = -24;
     arg_align = 8;
-#ifdef VERBOSE
-    printf("test arg_align=4->8, adjust=-24, (0-6, 2-8)\n");
+#ifdef __GNUC__
+    stack_reserve = 3;
 #endif
+    debprintf(("test arg_align=4->8, adjust=-24, stack_reserve=%d (0-6, 2-8)\n",
+	       stack_reserve));
   }
   for (i = 0; i < 9; i++) {
     if (a[i] == b4) {
       if ((i == 0 || a[i-1] == b3) && (i == 8 || a[i+1] == b5)) {
-	/* gcc-3.4 x86:   do_adjust=-16, stack_reserve=3 (alloca cannot write beyond) */
+	/* gcc-3.4 x86: do_adjust=-16, stack_reserve=3 (alloca cannot write beyond) */
 	*which = (i - 4) * sizeof (I32);
-#ifdef VERBOSE
-	printf("test %d,do_adjust=%d => which=%d\n",
-	       i-4, do_adjust, *which);
-#endif
+	if (i>0 && b2 != a[i-2]) stack_reserve = i-1;
+	debprintf(("test %d,do_adjust=%d,stack_reserve=%d => which=%d\n",
+		   i-4, do_adjust, stack_reserve, *which));
 	break;
       }
       else if ((i == 0 || a[i-1] == b5) && (i == 8 || a[i+1] == b3)) {
 	reverse = 1;
 	*which = (i - 4) * sizeof (I32);
-#ifdef VERBOSE
-	printf("test %d,do_adjust=%d => which=%d,reverse=1\n", 
-	       i-4, do_adjust, *which);
-#endif
+	debprintf(("test %d,do_adjust=%d => which=%d,reverse=1\n", 
+		   i-4, do_adjust, *which));
 	break;
       }
     }
@@ -114,6 +117,8 @@ int do_one_arg(x)
 {
   char *arg;
   int i;
+  void *d1,*d2,*d3;
+  d1 = d2 = d3 = NULL;
 
   args_size[0] = sizeof x;
   which = &adjust[0];
@@ -126,16 +131,16 @@ int do_one_arg(x)
   else {
     arg = (char *) alloca(9*arg_align);
     arg += do_adjust;
+    /* if (stack_reserve) arg = (void*)arg - stack_reserve; */
     for (i = 0; i < 9; i++) {
-#ifdef HAS_MEMCPY
-      memcpy(arg, &a[do_reverse ? 8-i : i], sizeof(I32));
-#else
       Copy(&a[do_reverse ? 8-i : i], arg, sizeof(I32), char);
-#endif
       arg += arg_align;
     }
   }
-  return ((int (*)()) test)();
+  if (stack_reserve == 3)
+    return ((int (*)()) test)(d1,d2,d3);
+  else
+    return ((int (*)()) test)();
 }
 
 int do_three_args(x, y, z)
@@ -145,6 +150,7 @@ int do_three_args(x, y, z)
 {
   char *arg;
   int i;
+  void *d1,*d2,*d3;
 
   args_size[1] = sizeof x + sizeof y + sizeof z;
   which = &adjust[1];
@@ -157,21 +163,16 @@ int do_three_args(x, y, z)
   else {
     arg = (char *) alloca(9*arg_align);
     arg += do_adjust;
-    /*
-    if (arg_align != sizeof(I32)) {
-      memset(arg, 0, 9*arg_align);
-    }
-    */
+    /*if (stack_reserve) arg = (void*)arg - stack_reserve;*/
     for (i = 0; i < 9; i++) {
-#ifdef HAS_MEMCPY
-      memcpy(arg, &a[do_reverse ? 8-i : i], sizeof(I32));
-#else
       Copy(&a[do_reverse ? 8-i : i], arg, sizeof(I32), char);
-#endif
       arg += arg_align;
     }
   }
-  return ((int (*)()) test)();
+  if (stack_reserve == 3)
+    return ((int (*)()) test)(d1,d2,d3);
+  else
+    return ((int (*)()) test)();
 }
 
 int main(argc, argv)
@@ -197,68 +198,58 @@ int main(argc, argv)
   one_by_one = (p1 - p2 == (grows_downward ? 1 : -1)); /* stack-align=4 */
   stack_align = abs((char*)p1 - (char*)p2);
 
-#ifdef VERBOSE  
-  printf("stack_align=%d,do_adjust=%d,grows_downward=%d,one_by_one=%d\n",
-	 stack_align,do_adjust,grows_downward,one_by_one);
-  printf("a0-8: %08x,%08x,%08x,%08x,%08x,%08x,%08x,%08x,%08x\n", 
-	 a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8]);
-#endif
+  debprintf(("stack_align=%d,do_adjust=%d,grows_downward=%d,one_by_one=%d\n",
+	     stack_align,do_adjust,grows_downward,one_by_one));
+  debprintf(("a0-8: %08x,%08x,%08x,%08x,%08x,%08x,%08x,%08x,%08x\n", 
+	     a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8]));
 
-  /* compute adjust[0] and reverse */
+  /* compute adjust[0], stack_reserve, reverse */
   one_arg = do_one_arg(NULL);
   do_adjust = adjust[0];
-#ifdef VERBOSE
-  printf("one_arg=%d,reverse=%d,adjust=[%d,%d]\n",
-	 one_arg,reverse,adjust[0],adjust[1]);
-#endif
-  if (!one_arg && reverse) {
-    do_reverse = reverse ^ (one_by_one ? grows_downward : 0);
-    /* try with computed adjust[0] and reverse */
-    one_arg = do_one_arg(NULL);
-    do_adjust = adjust[0];
-#ifdef VERBOSE
-    printf("one_arg=%d,do_reverse=%d,adjust=[%d,%d]\n",
-	   one_arg,do_reverse,adjust[0],adjust[1]);
-#endif
+  debprintf(("one_arg=%d,reverse=%d,adjust=[%d,%d]\n",
+	     one_arg,reverse,adjust[0],adjust[1]));
+  if (!one_arg) {
+    if (reverse) {
+      do_reverse = reverse ^ (one_by_one ? grows_downward : 0);
+      /* try with computed adjust[0] and reverse */
+      one_arg = do_one_arg(NULL);
+      do_adjust = adjust[0];
+      debprintf(("one_arg=%d,do_reverse=%d,adjust=[%d,%d]\n",
+		 one_arg,do_reverse,adjust[0],adjust[1]));
+    }
+    else if (stack_reserve || do_adjust) {
+      /* try with computed adjust[0] and stack_reserve */
+      one_arg = do_one_arg(NULL);
+      debprintf(("one_arg=%d,stack_reserve=%d,adjust=[%d,%d]\n",
+		 one_arg,stack_reserve,adjust[0],adjust[1]));
+    }
   }
 
   /* verify and compute adjust[1] for more args */
   three_args = do_three_args(0, NULL, 0.0);
-#ifdef VERBOSE
-  printf("three_args=%d,adjust=[%d,%d]\n",three_args,adjust[0],adjust[1]);
-#endif
+  debprintf(("three_args=%d,adjust=[%d,%d]\n",three_args,adjust[0],adjust[1]));
   /* adjust[1] maybe different? */
   if (! one_arg || ! three_args) {
     if (adjust[0] != 0) {
       do_adjust = adjust[1];
       one_arg = do_one_arg(NULL);
-#ifdef VERBOSE
-      printf("one_arg=%d,adjust=[%d,%d],do_adjust=%d\n",
-	     one_arg,adjust[0],adjust[1],do_adjust);
-#endif
+      debprintf(("one_arg=%d,adjust=[%d,%d],do_adjust=%d\n",
+		 one_arg,adjust[0],adjust[1],do_adjust));
       three_args = do_three_args(0, NULL, 0.0);
-#ifdef VERBOSE
-      printf("three_args=%d,adjust=[%d,%d],do_adjust=%d\n",
-	     three_args,adjust[0],adjust[1],do_adjust);
-#endif
+      debprintf(("three_args=%d,adjust=[%d,%d],do_adjust=%d\n",
+		 three_args,adjust[0],adjust[1],do_adjust));
     }
   }
   /* try it now with aligned stack */
   if (!one_by_one && (! one_arg || ! three_args)) {
     do_adjust = ((char*)p2 - (char*)p1) / 2;
-#ifdef VERBOSE
-    printf("try adjust=%d\n",do_adjust);
-#endif
+    debprintf(("try again adjust=%d\n",do_adjust));
     one_arg = do_one_arg(NULL);
-#ifdef VERBOSE
-    printf("one_arg=%d,adjust=[%d,%d],reverse=%d\n",
-	   one_arg,adjust[0],adjust[1],reverse);
-#endif
+    debprintf(("one_arg=%d,adjust=[%d,%d],reverse=%d\n",
+	       one_arg,adjust[0],adjust[1],reverse));
     three_args = do_three_args(0, NULL, 0.0);
-#ifdef VERBOSE
-    printf("three_args=%d,adjust=[%d,%d],reverse=%d\n",
-	   three_args,adjust[0],adjust[1],reverse);
-#endif
+    debprintf(("three_args=%d,adjust=[%d,%d],reverse=%d\n",
+	      three_args,adjust[0],adjust[1],reverse));
   }
   if (one_arg && three_args) {
     fp = fopen("cdecl.h", "w");
@@ -266,9 +257,10 @@ int main(argc, argv)
       return 1;
     }
     fprintf(fp, "/*\n"
-	    " * cdecl.h -- configuration parameters for the cdecl calling convention\n"
+	    " * cdecl.h -- configuration parameters for the cdecl%s calling convention\n"
 	    " *\n"
-	    " * Generated automatically by %s.\n", argv[0]);
+	    " * Generated automatically by %s.\n", 
+	    stack_reserve>0 ? "3" : "", argv[0]);
 #ifndef __FILE__
 #define __FILE__ "testcall.c"
 #endif
@@ -284,12 +276,12 @@ int main(argc, argv)
     fprintf(fp, "#define CDECL_ONE_BY_ONE %d\n",  one_by_one);
     fprintf(fp, "#define CDECL_ADJUST %d\n",      do_adjust);
     fprintf(fp, "#define CDECL_ARG_ALIGN %d\n",   arg_align);
+    fprintf(fp, "#define CDECL_STACK_RESERVE %d\n", stack_reserve);
     fprintf(fp, "#define CDECL_REVERSE %d\n",     do_reverse);
     fclose(fp);
+    debprintf(("cdecl%s ok\n", stack_reserve>0 ? "3" : ""));
     return 0;
   }
-#ifdef VERBOSE
-  printf("cdecl failed\n");
-#endif
+  debprintf(("cdecl failed\n"));
   return 1;
 }
