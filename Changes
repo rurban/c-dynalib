@@ -1,14 +1,19 @@
 Revision history for Perl extension C::DynaLib 
 (formerly ExtUtils::DynaLib, very formerly CLib).
 
-0.61  2010-05-10 rurban
+0.61  2010-05-?? rurban
+	Added calling conventions cdecl3 (ok) and dummy stdcall (NYI)
 	Fix t/win32.t
 	Better detect gcc
 	Improve perl Makefile.PL Verbose
 	Added experimental script/hparse.pl header parser
         removed Test::Simple dependency
-	added github repo
+	added repository http://github.com/rurban/c-dynalib
 	fix Quad issues introduced with 0.59
+	added dl_unload_file as used by dlopen/win32 platforms 
+          (most fortunately)
+	fix msvc6 activeperl 5.10 against malloc/free/realloc defines
+        fix C::DynaLib::Struct::Parse
 
 0.60  2010-04-20 23:55:12 rurban
         Improve library search and windows resolution:

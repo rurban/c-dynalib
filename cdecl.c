@@ -3,6 +3,8 @@
 
 /*
  * Convert Perl sub args to C args and pass them to (*func)().
+ * Caller cleanup.
+ * See http://en.wikipedia.org/wiki/X86_calling_conventions
  */
 static int
 cdecl_pray(ax, items, func)
@@ -37,14 +39,24 @@ void *func;
   }
   arg_on_stack = (char *) alloca(total_arg_len);
   arg_on_stack += CDECL_ADJUST;
+#if 0
+  if (sizeof(void*) == 8) {
+      memzero(arg_on_stack, total_arg_len);
+  }
+#endif
 #if CDECL_REVERSE
   for (i = items - 1; i >= DYNALIB_ARGSTART; i--) {
 #else  /* ! CDECL_REVERSE */
   for (i = DYNALIB_ARGSTART; i < items; i++) {
 #endif  /* ! CDECL_REVERSE */
     arg_scalar = SvPV(ST(i), arg_len);
+    if (sizeof(void*) == 8 && arg_len < 8) { 
+      /* amd64 aligns to 8, so zero the values of smaller args.
+	 http://blogs.msdn.com/oldnewthing/archive/2004/01/14/58579.aspx
+      */
+      memzero(arg_on_stack, 8);
+    }
     Copy(arg_scalar, arg_on_stack, arg_len, char);
-    /* XXX CDECL_ARG_ALIGN=8 for amd64 */
     arg_on_stack += arg_len;
   }
 #endif  /* ! CDECL_ONE_BY_ONE */

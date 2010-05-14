@@ -62,11 +62,10 @@ my $ccflags = $Config{ccflags};
 my $archname = $Config{archname};
 # cc can also be gcc
 if (!$is_gcc and $Config{cc} =~ /^cc/) {
-  my $test = `$Config{cc} -dumpversion`;
-  $is_gcc=1 if $test and $test eq $Config{gccversion}."\n";
+    my $test = `$Config{cc} -dumpversion`;
+    $is_gcc = 1 if $test and $test eq $Config{gccversion}."\n";
 }
 # TODO: support for the ia64 fastcall derivate (first four in regs, rest in args)
-#       -fstack-protector adds 32 bytes. $CDECL_ADJUST = -32
 unless (@convention) {
     for (
 	 #[ '^i?[x3-6]86', sub {'cdecl'} ],
@@ -87,8 +86,13 @@ unless (@convention) {
 	 )
     { @convention = &{$_->[1]}, last if $archname =~ /$_->[0]/i }
 }
+# freebsd7 gcc3.4.6 cdecl ok one_by_one=0,do_adjust=0,stack_reserve=0,do_reverse=0,arg_align=4
+# freebsd7 gcc4.2.1 cdecl ok one_by_one=0,do_adjust=0,stack_reserve=0,do_reverse=0,arg_align=4
+# cygwin7  gcc4.3.4 cdecl3 ok  one_by_one=0,do_adjust=-16,stack_reserve=3,do_reverse=0,arg_align=4
+# mingw    gcc3.4.5 cdecl fail one_by_one=0,do_adjust=-16,stack_reserve=3,do_reverse=0,arg_align=4
+# msvc6    cl 12    cdecl ok one_by_one=1,do_adjust=0,stack_reserve=0,do_reverse=0,arg_align=4
 
-# Disable cc optimization on non-gcc compilers
+# Disable cc optimization
 my $optimize = $Config{optimize};
 if ($is_msvc) {
     $optimize = '/Od';
@@ -99,6 +103,10 @@ if ($is_msvc) {
 if ($is_gcc and $ccflags =~ /-DDEBUGGING/) {
     $optimize .= " -g";
 }
+#if ($is_gcc and $ccflags !~ /omit-frame-pointer/) {
+#    # but it does not work as expected on linux+win32
+#    $optimize .= " -fomit-frame-pointer";
+#}
 
 WriteMakefile(
     'NAME'	=> 'C::DynaLib',
@@ -124,10 +132,10 @@ WriteMakefile(
       'ABSTRACT_FROM' => 'lib/C/DynaLib.pm') : ()),
     ($ExtUtils::MakeMaker::VERSION gt '6.46' ?
     ('META_MERGE'
-     => {"recommends" =>
+     => {recommends =>
 	 {
 	  "GCC::TranslationUnit" => "1.00",
-	  "Convert::Binary::C" => "0.70",
+	  "Convert::Binary::C"   => "0.70",
 	 },
 	 resources =>
 	 {
@@ -149,59 +157,56 @@ sub is_big_endian
       || unpack( "a*", pack "L", 0x34333231 );
     die "Native byte order ($byteorder) not supported!\n"
       if   $byteorder ne '1234'     and $byteorder ne '4321'
-	and $byteorder ne '12345678' and $byteorder ne '87654321';
+       and $byteorder ne '12345678' and $byteorder ne '87654321';
     $byteorder eq '4321' or $byteorder eq '87654321';
 }
 
 sub check_ieee_fp
 {
-  my @test = (
+    my @test = (
     {
-      value  => '-1.0',
-      double => pack( 'C*', 0xBF, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ),
-      single => pack( 'C*', 0xBF, 0x80, 0x00, 0x00 ),
+     value  => '-1.0',
+     double => pack( 'C*', 0xBF, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ),
+     single => pack( 'C*', 0xBF, 0x80, 0x00, 0x00 ),
     },
     {
-      value  => '0.0',
-      double => pack( 'C*', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ),
-      single => pack( 'C*', 0x00, 0x00, 0x00, 0x00 ),
+     value  => '0.0',
+     double => pack( 'C*', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ),
+     single => pack( 'C*', 0x00, 0x00, 0x00, 0x00 ),
     },
     {
-      value  => '0.4',
-      double => pack( 'C*', 0x3F, 0xD9, 0x99, 0x99, 0x99, 0x99, 0x99, 0x9A ),
-      single => pack( 'C*', 0x3E, 0xCC, 0xCC, 0xCD ),
+     value  => '0.4',
+     double => pack( 'C*', 0x3F, 0xD9, 0x99, 0x99, 0x99, 0x99, 0x99, 0x9A ),
+     single => pack( 'C*', 0x3E, 0xCC, 0xCC, 0xCD ),
     },
     {
-      value  => '1.0',
-      double => pack( 'C*', 0x3F, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ),
-      single => pack( 'C*', 0x3F, 0x80, 0x00, 0x00 ),
+     value  => '1.0',
+     double => pack( 'C*', 0x3F, 0xF0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ),
+     single => pack( 'C*', 0x3F, 0x80, 0x00, 0x00 ),
     },
     {
-      value  => '3.1415926535',
-      double => pack( 'C*', 0x40, 0x09, 0x21, 0xFB, 0x54, 0x41, 0x17, 0x44 ),
-      single => pack( 'C*', 0x40, 0x49, 0x0F, 0xDB ),
+     value  => '3.1415926535',
+     double => pack( 'C*', 0x40, 0x09, 0x21, 0xFB, 0x54, 0x41, 0x17, 0x44 ),
+     single => pack( 'C*', 0x40, 0x49, 0x0F, 0xDB ),
     },
     {
-      value  => '1.220703125e-4',
-      double => pack( 'C*', 0x3F, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ),
-      single => pack( 'C*', 0x39, 0x00, 0x00, 0x00 ),
+     value  => '1.220703125e-4',
+     double => pack( 'C*', 0x3F, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 ),
+     single => pack( 'C*', 0x39, 0x00, 0x00, 0x00 ),
     },
   );
-
   my @fail;
-
   for my $t ( @test ) {
-    my $s = pack 'f', $t->{value};
-    my $d = pack 'd', $t->{value};
-    unless( &is_big_endian ) { for( $s, $d ) { $_ = reverse $_ } }
+      my $s = pack 'f', $t->{value};
+      my $d = pack 'd', $t->{value};
+      unless( &is_big_endian ) { for( $s, $d ) { $_ = reverse $_ } }
 
-    $s eq $t->{single} or push @fail,
+      $s eq $t->{single} or push @fail,
         { value => $t->{value}, check => 'single', expected => $t->{single}, got => $s };
 
-    $d eq $t->{double} or push @fail,
+      $d eq $t->{double} or push @fail,
         { value => $t->{value}, check => 'double', expected => $t->{double}, got => $d };
   }
-
   return @fail;
 }
 
@@ -356,8 +361,15 @@ sub make_postamble {
 
     print "Writing $cdecl_h\n";
     if (write_cdecl_h($self)) {
-	@convention = ('cdecl')
-	    unless @convention;
+	unless (@convention) {
+	    # check if cdecl or cdecl3
+	    local $/;
+	    open F, "<", $cdecl_h;
+	    my $file = <F>;
+	    my ($cdecl3) = $file =~ /CDECL_STACK_RESERVE (\d)/;
+	    close F;
+	    @convention = $cdecl3 ? ('cdecl3') : ('cdecl');
+	}
     } elsif (@convention) {
 	print "Can't figure out this system.  I'll have to guess.\n"
 	    if $Verbose;
@@ -369,7 +381,7 @@ sub make_postamble {
 ***
 *** I can't figure out the correct way to pass arguments to a C function
 *** on this system.  This may be due to porting issues, a perl installation
-*** problem, or any number of things.  Maybe `perl Makefile.PL Verbose'
+*** problem, or any number of things.  Maybe 'perl Makefile.PL Verbose'
 *** will shed some light.
 ***
 *** I'll use the `hack30' calling convention, which may work some or most
@@ -405,19 +417,19 @@ sub MY::postamble {
     my $postamble = make_postamble($self);
 
     print "Using calling convention(s): @convention\n"
-	if $Verbose;
+      if $Verbose;
     for (@convention) { 
       $cflags{"-DDYNALIB_DECL=\\\"$_\\\""} = undef;
       $cflags{"-DDYNALIB_USE_$_"} = undef;
     }
 
     print "Default calling convention: $convention[0]\n"
-	if $Verbose;
+      if $Verbose;
     $cflags{"-DDYNALIB_DEFAULT_CONV"} = "\\\"$convention[0]\\\"";
 
     $num_callbacks = 4 unless defined($num_callbacks);
     print "Maximum number of callbacks: $num_callbacks\n"
-	if $Verbose;
+      if $Verbose;
     $cflags{"-DDYNALIB_NUM_CALLBACKS"} = $num_callbacks;
 
     my $defines = "\nDEFINE =";
@@ -475,7 +487,7 @@ sub write_cdecl_h {
 sub append_convert_defines_cdecl {
     my $cdecl_h = shift;
     open CDECL, ">>", $cdecl_h
-	or die "Can't write file \"$cdecl_h\": $!\n";
+      or die "Can't write file \"$cdecl_h\": $!\n";
     print CDECL<<CDECL_H;
 
 typedef unsigned char uchar;
@@ -525,7 +537,7 @@ sub write_conv {
     # Write conv.xsi, to be included in DynaLib.xs
 
     open XS, ">$conv_xs"
-	or die "Can't write file \"$conv_xs\": $!\n";
+      or die "Can't write file \"$conv_xs\": $!\n";
     print "Writing $conv_xs\n";
 
     print XS <<XS;
@@ -606,6 +618,7 @@ ${convention}_call_packed(symref, ret_type, ...)
 	  case 'd' :
 	    sv_setnv(sv, ${convention}_CALL(symref, double));
 	    break;
+	  case 'Z' :
 	  case 'p' :
 	    sv_setpv(sv, (char *) ${convention}_CALL(symref, char_p));
 	    break;
@@ -630,7 +643,7 @@ sub write_cbfunc {
     # Write cbfunc.c, to be included in DynaLib.xs
 
     open FUNCS, ">$cbfunc_c"
-	or die "Can't write file \"$cbfunc_c\": $!\n";
+      or die "Can't write file \"$cbfunc_c\": $!\n";
     print "Writing $cbfunc_c\n";
 
     print FUNCS <<FUNCS;
@@ -680,24 +693,24 @@ FUNCS
 
 sub parse_perl_types
 {
-  unless (eval "require Convert::Binary::C;") {
-    print "Warning: Convert::Binary::C not installed. PerlTypes not generated.\n";
-    return;
-  }
-  Convert::Binary::C->import;
-  use Data::Dumper;
-  my $byteorder = is_big_endian();
-  my $c = new Convert::Binary::C('ByteOrder' => $byteorder ? 'BigEndian' : 'LittleEndian');
-  $c->Include(["$Config{archlib}/CORE", '/usr/include', $Config{incpath},
-	       $Config{locincpth}, @{$c->Include}]);
-  eval { $c->parse("#include <EXTERN.h>\n#include <perl.h>"); };
-  my $cfg = $c->configure;
-  my $dump = Data::Dumper->Dump([$cfg], ['PerlTypes']);
-  my $fname = "lib/C/DynaLib/PerlTypes.pm";
-  open XS, "> $fname"
-    or die "Can't write file \"$fname\": $!\n";
-  print "Adding Convert::Binary::C configuration to $fname\n";
-  print XS <<XS;
+    unless (eval "require Convert::Binary::C;") {
+	print "Warning: Convert::Binary::C not installed. PerlTypes not generated.\n";
+	return;
+    }
+    Convert::Binary::C->import;
+    use Data::Dumper;
+    my $byteorder = is_big_endian();
+    my $c = new Convert::Binary::C('ByteOrder' => $byteorder ? 'BigEndian' : 'LittleEndian');
+    $c->Include(["$Config{archlib}/CORE", '/usr/include', $Config{incpath},
+		 $Config{locincpth}, @{$c->Include}]);
+    eval { $c->parse("#include <EXTERN.h>\n#include <perl.h>"); };
+    my $cfg = $c->configure;
+    my $dump = Data::Dumper->Dump([$cfg], ['PerlTypes']);
+    my $fname = "lib/C/DynaLib/PerlTypes.pm";
+    open XS, "> $fname"
+      or die "Can't write file \"$fname\": $!\n";
+    print "Adding Convert::Binary::C configuration to $fname\n";
+    print XS <<XS;
 # PerlTypes.pm generated by Makefile.PL.  Don't edit this file, edit Makefile.PL.
 # From Convert::Binary::C \$c->parse("#include <EXTERN.h>\n#include <perl.h>")->configure
 
@@ -708,6 +721,10 @@ $dump;
 1;
 __END__
 XS
-  # eval C::DynaLib::PERLTYPES => %C::DynaLib::Struct::PerlTypes;
-  close XS;
+    # eval C::DynaLib::PERLTYPES => %C::DynaLib::Struct::PerlTypes;
+    close XS;
 }
+
+# Local Variables:
+#   cperl-indent-level: 4
+# End

@@ -15,7 +15,7 @@ C::DynaLib::Struct - Tool for handling the C `struct' data type
 	[$template1, \@field_names1,]
 	... );
 
-  Parse C::DynaLib::Struct <<ENDC;
+  C::DynaLib::Struct::Parse <<ENDC;
   struct packet {
     unsigned short header;
     unsigned short flags;
@@ -209,6 +209,7 @@ sub Define {
 
 sub Parse {
   my $definition = shift;
+  $definition = shift if $definition eq 'C::DynaLib::Struct';
   my $c;
   require Convert::Binary::C;
   Convert::Binary::C->import;
@@ -217,21 +218,32 @@ sub Parse {
     $c->parse(@_);
   } else {
     require C::DynaLib::PerlTypes;
-    my $c = new Convert::Binary::C $C::DynaLib::PerlTypes::PerlTypes;
+    $c = Convert::Binary::C->new(%$C::DynaLib::PerlTypes::PerlTypes);
     $c->parse($definition, @_);
   }
   # all structs and unions
   for my $s ($c->compound) {
-    my $class = $s->identifier;
-    if (defined (${"${class}::template"})) {
-      carp "Redefinition of ".$s->type." $class";
+    my $record = $s->{identifier};
+    if (defined (${"${record}::template"})) {
+      carp "Redefinition of ".$s->{type}." $record\n";
     }
-    my @members = $s->members;
-    Define C::DynaLib::Struct($class, $s->packnames, \@members);
+    my @members = _members(@{$s->{declarations}});
+    Define C::DynaLib::Struct($record, _packnames(@{$s->{declarations}}), \@members);
   }
-  # XXX
-  use Data::Dumper;
-  print Dumper($c);
+}
+
+sub _members {
+  map {my $decl=$_->{declarators}[0]->{declarator}; $decl=~s/^\*//; $decl} @_;
+}
+sub _packnames {
+  my $types =
+    { int => 'i',
+      double => 'd',
+      char   => 'c',
+      long   => 'l',
+      short  => 's',
+    };
+  join "", map {$types->{$_->{type}}} @_;
 }
 
 1;

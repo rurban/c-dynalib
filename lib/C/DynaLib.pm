@@ -17,13 +17,14 @@ use vars qw($VERSION @ISA $AUTOLOAD @EXPORT @EXPORT_OK);
 use vars qw($GoodRet $DefConv $decl);
 use subs qw(AUTOLOAD new LibRef DESTROY DeclareSub);
 $VERSION = '0.61';
+use File::Spec;
 
 # inline-able constants?
 sub DYNALIB_DEFAULT_CONV ();
 sub PTR_TYPE ();
 
 @EXPORT = qw(PTR_TYPE);
-@EXPORT_OK = qw(Poke DeclareSub);
+@EXPORT_OK = qw(Poke DeclareSub LibRef Parse);
 
 require DynaLoader;
 require Exporter;
@@ -34,8 +35,10 @@ bootstrap C::DynaLib $VERSION, \$C::DynaLib::Callback::Config;
 
 #sub dl_findfile { DynaLoader::dl_findfile(@_) }
 #sub dl_load_file { DynaLoader::dl_load_file(@_) }
+# dlopen/win32 platforms only:
+#sub dl_unload_file { DynaLoader::dl_unload_file(@_) }
 
-$GoodRet = '(?:[ilscILSCfdp'.(PTR_TYPE eq 'q'?'qQ':'').']?|P\d+)';
+$GoodRet = '(?:[ilscILSCfdZp'.(PTR_TYPE eq 'q'?'qQ':'').']?|P\d+)';
 
 sub AUTOLOAD {
   my $constname;
@@ -58,7 +61,7 @@ sub new {
   my $lib;
   $lib = DynaLoader::dl_load_file($so, @_) unless $so =~ /\.a$/;
   if (!$lib) {
-    # XXX Duplicate most of the DynaLoader code, since DynaLoader is
+    # Duplicate most of the DynaLoader code, since DynaLoader is
     # not ready to find MSWin32 dll's.
     if ($^O =~ /MSWin32|cygwin/) {
       my ($found, @dirs, @names, @dl_library_path);
@@ -68,7 +71,7 @@ sub new {
         $lib = DynaLoader::dl_load_file("/bin/cygwin1.dll", @_);
         return bless \$lib, $class;
       }
-      if ($^O eq 'MSWin32' and $lib =~ /^(c|m|msvcrt)$/) {
+      if ($^O eq 'MSWin32' and $lib =~ /^(c|m|msvcrt|msvcrt\.lib)$/) {
         if ($lib = DynaLoader::dl_load_file($ENV{SYSTEMROOT}."\\System32\\MSVCRT.DLL", @_)) {
           return bless \$lib, $class;
         }
@@ -78,7 +81,7 @@ sub new {
       # Either a dll if there exists a unversioned dll,
       # or the import lib points to the versioned dll.
       push(@dirs, "/lib", "/usr/lib", "/usr/bin/", "/usr/local/bin")
-        unless $^O eq 'MSWin32';
+        unless $^O =~ /^(MSWin32|VMS)$/;
       push(@dirs, $ENV{SYSTEMROOT}."\\System32", $ENV{SYSTEMROOT}, ".")
         if $^O eq 'MSWin32';
       push(@names, "cyg$_.dll", "lib$_.dll.a") if $^O eq 'cygwin';
@@ -118,8 +121,8 @@ sub LibRef {
 }
 
 sub DESTROY {
-  DynaLoader::dl_free_file($_[0]->LibRef)
-    if defined (&DynaLoader::dl_free_file);
+  DynaLoader::dl_unload_file($_[0]->LibRef)
+    if defined (&DynaLoader::dl_unload_file);
 }
 
 sub DeclareSub {
@@ -208,7 +211,7 @@ sub DeclareSub {
 
 sub Parse {
   my $definition = shift;
-  # we might want to use GCC-TranslationUnit instead
+  # we might want to use GCC::TranslationUnit instead
   warn "C::DynaLib::Parse for functions not yet implemented";
   my $c;
   if (ref $definition eq 'Convert::Binary::C') {
@@ -249,7 +252,7 @@ sub my_croak {
     $Carp::CarpLevel = 2;
     $text =~ s/(?: in pack)? at \(eval \d+\) line \d+.*\n//;
   }
-  croak($text); 
+  croak($text);
 };
 
 
@@ -338,6 +341,7 @@ C::DynaLib - Dynamic Perl interface to C compiled code.
   # or
   $func = $lib->DeclareSub( { "name" => $symbol_name,
 			      [param => $value,] ... } );
+  $func = $lib->DeclareSub( $symbol_name, $ret, $params...);
   # or
   use C::DynaLib qw(DeclareSub);
   $func = DeclareSub( $function_pointer,
@@ -402,10 +406,10 @@ Alternatively, a linker command-line argument (e.g., C<"-lc">) may be
 specified.  See L<DynaLoader(3)> for details on how such arguments are
 mapped to file names.
 
-Note: On cygwin or mingw the import library F</usr/lib/libC<lt>nameC<gt>.dll.a>
-contains the name of the .dll, so -lC<lt>nameC<gt> is enough, and you don't
-have to use the versioned name of the dll. C<dllimport -I lib>
-prints the dll name.
+Note: On cygwin or mingw the import library
+F</usr/lib/libC<lt>nameC<gt>.dll.a> contains the name of the .dll, so
+-lC<lt>nameC<gt> is enough, and you don't have to use the versioned
+name of the dll. C<dllimport -I lib> will be used to get the dll name.
 
 On failure, C<new> returns C<undef>.  Error information I<might> be
 obtainable by calling C<DynaLoader::dl_error()>.
@@ -431,9 +435,16 @@ type as the second argument to C<DeclareSub>.  If the function returns
 C<void>, you should use C<""> as the second argument.
 
 C data types are specified using the codes used by Perl's C<pack> and
-C<unpack> operators.  See L<perlfunc(1)> for their description.  As a
-convenience (and to hide system dependencies), C<PTR_TYPE> is defined
-as a code suitable for pointer types (typically C<"i">).
+C<unpack> operators. See L<perlfunc/pack> for their description.
+'p' is a perl string which points to the foreign buffer. Note that not
+all perl-level modifications do the same as their c-level counterparts.
+E.g. changing the start of the string will not do a memmove c-side, rather
+the SvOOK hack is used (See L<perlguts>. Extending the length of the
+string will destructively modify foreign data, only causing SIGSEGV if
+you are lucky.
+
+As a convenience (and to hide system dependencies), C<PTR_TYPE> is
+defined as a code suitable for pointer types (typically C<"i">).
 
 The possible arguments to C<DeclareSub> are shown below.  Each is
 listed under the name that is used when passing the arguments in a
@@ -456,9 +467,9 @@ specified in the method forms.
 
 The return type of the function, encoded for use with the C<pack>
 operator.  Not all of the C<pack> codes are supported, but the
-unsupported ones mostly don't make sense as C return types.  Functions
-that return a C<struct> are not supported.  However, a I<pointer> to
-struct is okay.
+unsupported ones mostly don't make sense as C return types.
+Functions that return a C<struct> are not supported.
+However, a I<pointer> to struct is okay.
 
 Many C functions return pointers to various things.  If you have a
 function that returns C<S<char *>> and all you're interested in is the
@@ -468,7 +479,7 @@ by a number of bytes) is also permissible.
 
 For the case where a returned pointer value must be remembered (for
 example, I<malloc()>), use C<PTR_TYPE>.  The returned scalar will be
-the pointer itself.  You can use C<unpack> to find the thing pointed
+the pointer itself.  You can use L<unpack> to find the thing pointed
 to.
 
 =item C<args>
@@ -488,7 +499,8 @@ of C<"f">.  Stick with C<"i">, C<"I">, C<"d">, C<"p">, C<"P">, and
 C<PTR_TYPE> if you want to be safe.
 
 Passing structs by value is not generally supported, but you might
-find a way to do it with a given compiler by experimenting.
+find a way to do it with a given compiler by experimenting or
+using L<C::DynaLib::Struct>.
 
 =item C<decl>
 
@@ -496,17 +508,29 @@ Allows you to specify a function's calling convention.  This is
 possible only with a named-parameter form of C<DeclareSub>. See below
 for information about the supported calling conventions.
 
-The global $C::DynaLib::decl holds the string for global declaration convention.
+The global $C::DynaLib::decl holds the string for the current
+global declaration convention.
 
 =item ->LibRef()
 
 A library reference obtained from either C<DynaLoader::dl_load_file>
-or the C<C::DynaLib::LibRef> method.  You must use a named-parameter
+or the C<C::DynaLib::LibRef> method. You must use a named-parameter
 form of C<DeclareSub> in order to specify this argument.
 
 =back
 
-=head2 ->Parse( '<<EOS' ) - Parse macro, function and struct declarations
+=head2 PTR_TYPE()
+
+Type declaration for an opaque pointer, which is either "i", "q",
+"l" or "s".
+
+If you want to use strings use "p" instead.
+
+=head2 $decl
+
+Name of the currently used calling convention. See below.
+
+=head2 Parse( '<<EOS' ) - Parse macro, function and struct declarations
 
 The argument may be c-string (best done via '<<EOS' ... EOS)
 or a Convert::Binary::C object.
@@ -686,6 +710,8 @@ Note that the convention must match that of the function in the
 dynamic library, otherwise crashes or incorrect results are likely to
 occur.
 
+The current convention is in C<$C::DynaLib::decl>.
+
 =over 4
 
 =item C<cdecl>
@@ -693,13 +719,24 @@ occur.
 All arguments are placed on the stack in reverse order from how the
 function is invoked. This seems to be the default for Intel-based
 machines and some others.
+The generated F<cdecl.h> contains some internal options for this
+declaration.
+
+=item C<cdecl3>
+
+Same as cdecl, but with special-casing a new gcc limitation that on
+function calls without args, the first three words alloca'd may not
+be overwritten.
+
+The generated F<cdecl.h> contains some internal options for this
+declaration. CDECL_STACK_RESERVE = 1, 2 or 3.
 
 =item C<sparc>
 
 The first 24 bytes of arguments are cast to an array of six C<int>s.
 The remaining args (and possibly piece of an arg) are placed on the
 stack. Then the C function is called as if it expected six integer
-arguments.  On a Sparc, the six "pseudo-arguments" are passed in
+arguments. On a Sparc, the six "pseudo-arguments" are passed in
 special registers.
 
 =item C<alpha>
@@ -727,6 +764,23 @@ arguments (Win32 API functions crash because of this).
 Because of these problems, the use of C<hack30> is recommended only as
 a quick fix until your system's calling convention is supported.
 
+=item C<stdcall> NOT YET IMPLEMENTED FULLY
+
+All arguments are placed on the stack in normal order from how the
+function is invoked.
+
+Additionally the callee cleans up the stack, contrary to cdecl,
+where the caller cleans up the stack. This is not yet implemented.
+
+This is the default for PASCAL and the Win32 API.
+C<stdcall> is detected as C<cdecl> with CDECL_REVERSE = 0.
+
+=item C<fastcall> NOT YET IMPLEMENTED
+
+The ia64 variant of C<alpha>, used in Win64 libraries. But there
+are many more fastcall conventions.
+See L<http://en.wikipedia.org/wiki/X86_calling_conventions>.
+
 =back
 
 =head1 BUGS
@@ -736,7 +790,7 @@ Several unresolved issues surround this module.
 =head2 Portability
 
 The "glue" code that allows Perl values to be passed as arguments to C
-functions is architecture-dependent.  This is because the author knows
+functions is architecture-dependent.  This is because the authors knows
 of no standard means of determining a system's parameter-passing
 conventions or passing arguments to a C function whose signature is
 not known at compile time.
@@ -786,7 +840,8 @@ support XS modules, which are loaded once by a program and not (to my
 knowledge) unloaded.  It would be nice to be able to free the
 libraries loaded by this module when they are no longer needed.  This
 will be impossible, as long as F<DynaLoader> provides no means to do
-so.
+so. L<DynaLoader::dl_unload_file> was added March 2000 for dl_dlopen
+only.
 
 =head2 Literal and temporary strings
 
@@ -820,7 +875,7 @@ too much.  I haven't yet checked for memory leaks.
 =head1 TODO
 
   Support fastcall (regs only) and ia64 (first four in regs, rest on stack)
-  calling conventions.
+  calling conventions. Very similar to alpha
 
   Fiddle with autoloading so we don't have to call DeclareSub
   all the time.
@@ -828,12 +883,14 @@ too much.  I haven't yet checked for memory leaks.
   Mangle C++ symbol names.
 
   Parse C header files (macros, structs and function declarations) via
-  Convert::Binary::C to make them useful here.
+  Convert::Binary::C and/or GCC::TranslationUnit to make them useful here.
+
+  Add stdcall dynamically on cdecl or hack30 for the W32 API.
 
 =head1 LICENSE
 
 Copyright (c) 1997, 2000 by John Tobey.
-Copyright (c) 2005, 2007, 2008 by Reini Urban.
+Copyright (c) 2005, 2007, 2008, 2010 by Reini Urban.
 This package is distributed under the same license as Perl itself.
 There is no expressed or implied warranty, since it is free software.
 See the file README in the top level Perl source directory for details.

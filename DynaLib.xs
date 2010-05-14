@@ -15,28 +15,42 @@ extern "C" {
 #define in_eval PL_in_eval
 #endif
 
-/* First i such that ST(i) is a func arg */
+/* First i such that ST(i) is a func arg. 
+   This is not hardcoded anymore, as it is checked dynamically at testcall.
+   => CDECL_STACK_RESERVE
+*/
 #define DYNALIB_ARGSTART 3
 
 #ifndef DYNALIB_NUM_CALLBACKS
 #define DYNALIB_NUM_CALLBACKS 0
 #endif
 
+#ifdef DYNALIB_USE_cdecl3
+# define DYNALIB_DECL "cdecl3"
+# include "cdecl3.c"
+#endif
 #ifdef DYNALIB_USE_cdecl
-#define DYNALIB_DECL "cdecl"
-#include "cdecl.c"
+# define DYNALIB_DECL "cdecl"
+# include "cdecl.c"
 #endif
 #ifdef DYNALIB_USE_sparc
-#define DYNALIB_DECL "sparc"
-#include "sparc.c"
+# define DYNALIB_DECL "sparc"
+# include "sparc.c"
 #endif
 #ifdef DYNALIB_USE_alpha
-#define DYNALIB_DECL "alpha"
-#include "alpha.c"
+# define DYNALIB_DECL "alpha"
+# include "alpha.c"
 #endif
 #ifdef DYNALIB_USE_hack30
-#define DYNALIB_DECL "hack30"
-#include "hack30.c"
+# define DYNALIB_DECL "hack30"
+# include "hack30.c"
+#endif
+/* may be used additionally */
+#ifdef DYNALIB_USE_stdcall
+# ifndef DYNALIB_DECL
+#   define DYNALIB_DECL "stdcall"
+# endif
+# include "stdcall.c"
 #endif
 
 typedef long (*cb_callback) _((void * a, ...));
@@ -155,6 +169,7 @@ cb_call_sub(index, first, ap)
 				      (int) strtol(arg_type, &arg_type, 10))));
 	    -- arg_type;
 	    break;
+	case 'Z' :
 	case 'p' :
 	    XPUSHs(sv_2mortal(newSVpv((char *) first, 0)));
 	    break;
@@ -224,6 +239,7 @@ cb_call_sub(index, first, ap)
 					  (int) strtol(arg_type, &arg_type, 10))));
 		-- arg_type;
 		break;
+	    case 'Z' :
 	    case 'p' :
 		XPUSHs(sv_2mortal(newSVpv(va_arg(ap, char *), 0)));
 		break;
@@ -288,6 +304,7 @@ cb_call_sub(index, first, ap)
 #endif
 	/*
 	 * Returning a pointer is impossible to do safely, it seems.
+	 * We rather want to return a string instead.
 	 * case 'p' :
 	 *   result = (long) POPp;
 	 *   break;
@@ -357,7 +374,6 @@ Poke(dest, data)
 	    Copy(source, dest, len, char);
 	  }
 	}
-
 
 BOOT:
 	/* $C::DynaLib::decl = cdecl or hack30 or ...; */
