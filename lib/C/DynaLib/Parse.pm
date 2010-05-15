@@ -40,11 +40,12 @@ sub GCC_prepare { # decl, [gcc]
   my $tmpname = $tmp->filename;
   print $tmp "$code\n";
   close $tmp;
-  system "$cc -fdump-translation-unit -c $tmpname";
+  system "$cc -c -fdump-translation-unit $tmpname";
   my @tu = glob "$tmpname.*.tu" or die;
   my $tu = pop @tu;
   my $node = GCC::TranslationUnit::Parser->parsefile($tu)->root;
-  unlink $tu;
+  $tmpname =~ s/\.c$/.o/;
+  unlink $tu, $tmpname;
   $node;
 }
 
