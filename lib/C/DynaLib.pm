@@ -18,6 +18,7 @@ use vars qw($GoodRet $DefConv $decl);
 use subs qw(AUTOLOAD new LibRef DESTROY DeclareSub);
 $VERSION = '0.61';
 use File::Spec;
+use C::DynaLib::Struct;
 
 # inline-able constants?
 sub DYNALIB_DEFAULT_CONV ();
@@ -210,28 +211,38 @@ sub DeclareSub {
 }
 
 sub Parse {
-  my $definition = shift;
-  # we might want to use GCC::TranslationUnit instead
-  warn "C::DynaLib::Parse for functions not yet implemented";
-  my $c;
-  if (ref $definition eq 'Convert::Binary::C') {
-    $c = $definition;
-    $c->parse(@_);
-  } else {
-    require C::DynaLib::PerlTypes;
-    require Convert::Binary::C;
-    Convert::Binary::C->import();
-    my $c = new Convert::Binary::C $C::DynaLib::PerlTypes::PerlTypes;
-    $c->parse($definition, @_);
+  my $is_gcc = $Config{cc} =~ /gcc/i && $Config{gccversion} >= 3;
+  if (!$is_gcc and $Config{cc} =~ /^cc/) {
+    my $test = `$Config{cc} -dumpversion`;
+    $is_gcc = 1 if $test and $test eq $Config{gccversion}."\n";
   }
-  # these are all structs and unions, but we want the functions
-  for my $s ($c->compound) {
-    my $class = $s->identifier;
-    C::DynaLib::Struct::Parse($s->sourcify);
-  }
-  # XXX
-  use Data::Dumper;
-  print Dumper($c);
+  warn "Parse needs a gcc with -fdump-translation-unit or gccxml\n"
+    unless $is_gcc;
+
+}
+
+sub _pack_types {
+  my $types =
+    {
+     int     => 'i',
+     double  => 'd',
+     char    => 'c',
+     long    => 'l',
+     short   => 's',
+     'signed int'     => 'i',
+     'signed char'    => 'c',
+     'signed long'    => 'l',
+     'signed short'   => 's',
+     'char*' => 'p',
+     'void*' => PTR_TYPE,
+     'unsigned int'    => 'I',
+     'unsigned char'   => 'C',
+     'unsigned long'   => 'L',
+     'unsigned short'  => 'S',
+     'long long'       => 'q',
+     'unsigned long long' => 'Q',
+    };
+  join "", map {defined $types->{$_} ? $types->{$_} : PTR_TYPE} @_;
 }
 
 sub my_carp {
@@ -414,7 +425,7 @@ name of the dll. C<dllimport -I lib> will be used to get the dll name.
 On failure, C<new> returns C<undef>.  Error information I<might> be
 obtainable by calling C<DynaLoader::dl_error()>.
 
-=head2 DeclareSub( {} | ... ) - Declaring a library routine
+=head2 DeclareSub( {} | name return args ... ) - Declare a function pack-style
 
 Before you can call a function in a dynamic library, you must specify
 its name, the return type, and the number and types of arguments it
@@ -530,12 +541,13 @@ If you want to use strings use "p" instead.
 
 Name of the currently used calling convention. See below.
 
-=head2 Parse( '<<EOS' ) - Parse macro, function and struct declarations
+=head2 Parse( '<<EOS' ) - Parse macro, function and struct declarations c-style
 
 The argument may be c-string (best done via '<<EOS' ... EOS)
 or a Convert::Binary::C object.
 
 NYI for funcs. Only C::DynaLib::Struct->Parse is implemented yet.
+TODO with L<GCC::TranslationUnit>. See F<script/hparse.pl>
 
 =head2 Calling a declared function
 
@@ -720,16 +732,18 @@ All arguments are placed on the stack in reverse order from how the
 function is invoked. This seems to be the default for Intel-based
 machines and some others.
 The generated F<cdecl.h> contains some internal options for this
-declaration.
+declaration. Normal stack order is also detected and supported,
+though this is no strict _cdecl convention.
 
 =item C<cdecl3>
 
-Same as cdecl, but with special-casing a new gcc limitation that on
-function calls without args, the first three words alloca'd may not
-be overwritten.
+Same as C<cdecl>, but with special-casing a new gcc limitation that on
+function calls without args, the first three pointers alloca'd may not
+be overwritten. This is no calling convention, just a fastcall-like
+hack.
 
 The generated F<cdecl.h> contains some internal options for this
-declaration. CDECL_STACK_RESERVE = 1, 2 or 3.
+declaration. CDECL_STACK_RESERVE = 1, 2, 3, 4 or 6.
 
 =item C<sparc>
 
@@ -773,12 +787,17 @@ Additionally the callee cleans up the stack, contrary to cdecl,
 where the caller cleans up the stack. This is not yet implemented.
 
 This is the default for PASCAL and the Win32 API.
-C<stdcall> is detected as C<cdecl> with CDECL_REVERSE = 0.
+C<stdcall> is detected as C<cdecl> with C<CDECL_REVERSE = 0>.
 
 =item C<fastcall> NOT YET IMPLEMENTED
 
-The ia64 variant of C<alpha>, used in Win64 libraries. But there
-are many more fastcall conventions.
+The ia64 variant of C<alpha>, used in x86_64 libraries, but using
+4 registers, not 6. I<(amd64/x86_64 uses rdi,rdx,rcx,rbx for the
+first 4 args)>
+We try to detect and mimic this behaviour in C<cdecl3> with
+C<CDECL_STACK_RESERVE = 4>.
+
+But there are many more fastcall conventions.
 See L<http://en.wikipedia.org/wiki/X86_calling_conventions>.
 
 =back
@@ -837,11 +856,10 @@ L<perlsec>)
 To maximize portability, this module uses the F<DynaLoader> interface
 to dynamic library linking.  F<DynaLoader>'s main purpose is to
 support XS modules, which are loaded once by a program and not (to my
-knowledge) unloaded.  It would be nice to be able to free the
-libraries loaded by this module when they are no longer needed.  This
-will be impossible, as long as F<DynaLoader> provides no means to do
-so. L<DynaLoader::dl_unload_file> was added March 2000 for dl_dlopen
-only.
+knowledge) unloaded.
+
+L<DynaLoader::dl_unload_file> was added March 2000 for solaris, aix,
+linux, hpux, OS/390, symbian, cygwin and win32. For darwin e.g. not.
 
 =head2 Literal and temporary strings
 
@@ -875,7 +893,7 @@ too much.  I haven't yet checked for memory leaks.
 =head1 TODO
 
   Support fastcall (regs only) and ia64 (first four in regs, rest on stack)
-  calling conventions. Very similar to alpha
+  calling conventions. Very similar to alpha. See cdecl3 with stack_reserve=4
 
   Fiddle with autoloading so we don't have to call DeclareSub
   all the time.
@@ -884,8 +902,15 @@ too much.  I haven't yet checked for memory leaks.
 
   Parse C header files (macros, structs and function declarations) via
   Convert::Binary::C and/or GCC::TranslationUnit to make them useful here.
+  Convert::Binary::C should be extended to return function types.
+  The struct parser using Convert::Binary::C  needs more robustness.
+  See hparse.pl for using GCC::TranslationUnit. gccxml might also be
+  worthwhile.
 
-  Add stdcall dynamically on cdecl or hack30 for the W32 API.
+  Multiple calling-conventions:
+  Add stdcall dynamically on cdecl/cdecl3/hack30 for the W32 API.
+  Include and link the useful ones per platform, and define a
+  DeclareSub or LibRef syntax.
 
 =head1 LICENSE
 
@@ -900,14 +925,18 @@ The Perl source may be found at:
 
 =head1 AUTHOR
 
-John Tobey, jtobey@john-edwin-tobey.org
+John Tobey C<lt>jtobey@john-edwin-tobey.orgC<gt>
 
-Maintainer: Reini Urban <rurban@cpan.org>
+Maintainer: Reini Urban C<lt>rurban@cpan.orgC<gt>
 
 =head1 SEE ALSO
 
-L<perl(1)>, L<perlfunc(1)> (for C<pack>), L<perlref(1)>,
-L<sigtrap(3)>, L<DynaLoader(3)>, L<perlxs(1)>, L<perlcall(1)>,
-L<Win32::API>, L<FFI>, L<DynaLib::Struct>.
+L<perl(1)>, L<perlfunc/pack>, L<perlref>,
+L<sigtrap(3)>, L<DynaLoader>, L<perlxs>, L<perlcall>
+
+L<C::DynaLib::Struct> to conveniently declare and access structs.
+
+The other perl FFIs:
+L<Win32::API>, L<FFI>, L<P5NCI>, L<CTypes> I<(not yet)>
 
 =cut

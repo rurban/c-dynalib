@@ -83,20 +83,21 @@ int test(I32 b0,I32 b1,I32 b2,I32 b3,I32 b4,I32 b5,I32 b6,I32 b7,I32 b8)
   debprintf(("b0-8: %08x,%08x,%08x,%08x,%08x,%08x,%08x,%08x,%08x\n", 
 	     b0,b1,b2,b3,b4,b5,b6,b7,b8));
   /* cdecl3 tests: */
-  /* gcc-3.4 amd64: do_adjust=-24, stack_reserve=3 (3 ptrs) */
+  /* gcc amd64: do_adjust=-24, stack_reserve=4 (first 4 args in regs) */
   if ((sizeof(int*) == 8) && (a[0] == b6) && (a[2] == b7)) {
-    *which = -24; /* 3*sizeof(void*) */
+    *which = -24;      /* 3*sizeof(void*) */
     arg_align = 8;
 #ifdef __GNUC__
-    stack_reserve = 3; /* i.e. DYNALIB_ARGSTART */
+    stack_reserve = 4;
 #endif
-    debprintf(("test arg_align=4->8: adjust=-24, stack_reserve=%d (0-6, 2-8)\n",
+    debprintf(("test arg_align=4->8:adjust=-24,stack_reserve=%d (0-6, 2-8)\n",
 	       stack_reserve));
   }
   for (i = 0; i < 9; i++) {
     if (a[i] == b4) {
       if ((i == 0 || a[i-1] == b3) && (i == 8 || a[i+1] == b5)) {
-	/* gcc x86 win32+linux: do_adjust=-16, stack_reserve=3 (alloca cannot write beyond) */
+	/* gcc x86 win32+linux: do_adjust=-16, stack_reserve=3 
+	   (alloca cannot write beyond) */
 	*which = (i - 4) * sizeof (I32);
 	if (i>0 && b2 != a[i-2]) stack_reserve = i-1-stack_reserve;
 	debprintf(("test %d,do_adjust=%d,stack_reserve=%d => which=%d\n",
@@ -115,52 +116,87 @@ int test(I32 b0,I32 b1,I32 b2,I32 b3,I32 b4,I32 b5,I32 b6,I32 b7,I32 b8)
   return 0;
 }
 
+#define DO_CALL								\
+  char *arg;								\
+  int i;								\
+  void *d1,*d2,*d3,*d4,*d5,*d6;						\
+  d1 = d2 = d3 = d4 = d5 = d6 = NULL;					\
+									\
+  which = &adjust[0];							\
+  if (one_by_one) {							\
+    for (i = 8; i >= 0; i--) {						\
+      arg = (char *)alloca(sizeof (I32));				\
+      Copy(&a[do_reverse ? 8-i : i], arg, sizeof (I32), char);		\
+    }									\
+  }									\
+  else {								\
+    arg = (char *)alloca((9-stack_reserve)*arg_align);			\
+    arg += do_adjust;							\
+    arg += stack_reserve*sizeof(I32);					\
+    for (i = stack_reserve; i < 9; i++) {				\
+      if (arg_align > sizeof(I32)) {					\
+	/* amd64 aligns to 8, so zero the values of smaller args.	\
+	   http://blogs.msdn.com/oldnewthing/archive/2004/01/14/58579.aspx \
+	*/								\
+	memzero(arg, arg_align);					\
+      }									\
+      memcpy(arg,(const char*)&a[do_reverse ? 8-i : i], sizeof(I32));	\
+      /*Copy(&a[do_reverse ? 8-i : i], arg, sizeof(I32), char);*/	\
+      arg += arg_align;							\
+    }									\
+  }									\
+									\
+  if (stack_reserve == 0) {						\
+    return ((int (*)()) test)();					\
+  }									\
+  else if (stack_reserve == 3) {					\
+    Copy(&a[do_reverse ? 8-0 : 0], &d1, sizeof(I32), char);		\
+    Copy(&a[do_reverse ? 8-1 : 1], &d2, sizeof(I32), char);		\
+    Copy(&a[do_reverse ? 8-2 : 2], &d3, sizeof(I32), char);		\
+    return ((int (*)()) test)(d1,d2,d3);				\
+  }									\
+  else if (stack_reserve == 6) {					\
+    Copy(&a[do_reverse ? 8-0 : 0], &d1, sizeof(I32), char);		\
+    Copy(&a[do_reverse ? 8-1 : 1], &d2, sizeof(I32), char);		\
+    Copy(&a[do_reverse ? 8-2 : 2], &d3, sizeof(I32), char);		\
+    Copy(&a[do_reverse ? 8-3 : 3], &d4, sizeof(I32), char);		\
+    Copy(&a[do_reverse ? 8-3 : 4], &d5, sizeof(I32), char);		\
+    Copy(&a[do_reverse ? 8-3 : 5], &d6, sizeof(I32), char);		\
+    return ((int (*)()) test)(d1,d2,d3,d4,d5,d6);			\
+  }									\
+  else if (stack_reserve == 4) {					\
+    /* amd64 uses rdi,rdx,rcx,rbx for first 4 args */			\
+    Copy(&a[do_reverse ? 8-0 : 0], &d1, sizeof(I32), char);		\
+    Copy(&a[do_reverse ? 8-1 : 1], &d2, sizeof(I32), char);		\
+    Copy(&a[do_reverse ? 8-2 : 2], &d3, sizeof(I32), char);		\
+    Copy(&a[do_reverse ? 8-3 : 3], &d4, sizeof(I32), char);		\
+    return ((int (*)()) test)(d1,d2,d3,d4);				\
+  }									\
+  else if (stack_reserve == 1) {					\
+    Copy(&a[do_reverse ? 8-0 : 0], &d1, sizeof(I32), char);		\
+    return ((int (*)()) test)(d1);					\
+  }									\
+  else if (stack_reserve == 2) {					\
+    Copy(&a[do_reverse ? 8-0 : 0], &d1, sizeof(I32), char);		\
+    Copy(&a[do_reverse ? 8-1 : 1], &d2, sizeof(I32), char);		\
+    return ((int (*)()) test)(d1,d2);					\
+  }									\
+  else {								\
+    printf("invalid stack_reserve=%d\n", stack_reserve);		\
+    exit (1);								\
+  }
+
+int do_no_arg()
+{
+  args_size[0] = 0;
+  DO_CALL;
+}
+
 int do_one_arg(x)
   char *x;
 {
-  char *arg;
-  int i;
-  void *d1,*d2,*d3;
-  d1 = d2 = d3 = NULL;
-
-  args_size[0] = sizeof x;
-  which = &adjust[0];
-  if (one_by_one) {
-    for (i = 8; i >= 0; i--) {
-      arg = (char *) alloca(sizeof (I32));
-      Copy(&a[do_reverse ? 8-i : i], arg, sizeof (I32), char);
-    }
-  }
-  else {
-    arg = (char *) alloca(9*arg_align);
-    arg += do_adjust;
-    for (i = 0; i < 9; i++) {
-      Copy(&a[do_reverse ? 8-i : i], arg, sizeof(I32), char);
-      arg += arg_align;
-    }
-  }
-  if (stack_reserve == 3) {
-    Copy(&a[do_reverse ? 8-0 : 0], &d1, sizeof(I32), char);
-    Copy(&a[do_reverse ? 8-1 : 1], &d2, sizeof(I32), char);
-    Copy(&a[do_reverse ? 8-2 : 2], &d3, sizeof(I32), char);
-    return ((int (*)()) test)(d1,d2,d3);
-  }
-  else if (stack_reserve == 0) {
-    return ((int (*)()) test)();
-  }
-  else if (stack_reserve == 1) {
-    Copy(&a[do_reverse ? 8-0 : 0], &d1, sizeof(I32), char);
-    return ((int (*)()) test)(d1);
-  }
-  else if (stack_reserve == 2) {
-    Copy(&a[do_reverse ? 8-0 : 0], &d1, sizeof(I32), char);
-    Copy(&a[do_reverse ? 8-1 : 1], &d2, sizeof(I32), char);
-    return ((int (*)()) test)(d1,d2);
-  }
-  else {
-    printf("invalid stack_reserve=%d\n", stack_reserve);
-    exit (1);
-  }
+  args_size[0] = sizeof(x);
+  DO_CALL;
 }
 
 int do_three_args(x, y, z)
@@ -168,49 +204,8 @@ int do_three_args(x, y, z)
   char *y;
   double z;
 {
-  char *arg;
-  int i;
-  void *d1,*d2,*d3;
-  d1 = d2 = d3 = NULL;
-
-  args_size[1] = sizeof x + sizeof y + sizeof z;
-  which = &adjust[1];
-  if (one_by_one) {
-    for (i = 8; i >= 0; i--) {
-      arg = (char *) alloca(sizeof (I32));
-      Copy(&a[do_reverse ? 8-i : i], arg, sizeof (I32), char);
-    }
-  }
-  else {
-    arg = (char *) alloca(9*arg_align);
-    arg += do_adjust;
-    for (i = 0; i < 9; i++) {
-      Copy(&a[do_reverse ? 8-i : i], arg, sizeof(I32), char);
-      arg += arg_align;
-    }
-  }
-  if (stack_reserve == 3) {
-    Copy(&a[do_reverse ? 8-0 : 0], &d1, sizeof(I32), char);
-    Copy(&a[do_reverse ? 8-1 : 1], &d2, sizeof(I32), char);
-    Copy(&a[do_reverse ? 8-2 : 2], &d3, sizeof(I32), char);
-    return ((int (*)()) test)(d1,d2,d3);
-  }
-  else if (stack_reserve == 0) {
-    return ((int (*)()) test)();
-  }
-  else if (stack_reserve == 1) {
-    Copy(&a[do_reverse ? 8-0 : 0], &d1, sizeof(I32), char);
-    return ((int (*)()) test)(d1);
-  }
-  else if (stack_reserve == 2) {
-    Copy(&a[do_reverse ? 8-0 : 0], &d1, sizeof(I32), char);
-    Copy(&a[do_reverse ? 8-1 : 1], &d2, sizeof(I32), char);
-    return ((int (*)()) test)(d1,d2);
-  }
-  else {
-    printf("invalid stack_reserve=%d\n", stack_reserve);
-    exit (1);
-  }
+  args_size[0] = sizeof(x)+sizeof(y)+sizeof(z);
+  DO_CALL;
 }
 
 int main(argc, argv)
@@ -218,7 +213,7 @@ int main(argc, argv)
   char **argv;
 {
   FILE *fp;
-  int one_arg, three_args;
+  int one_arg, three_args, no_arg;
   int *p1, *p2;
 
 #ifdef SIGSEGV
@@ -230,8 +225,8 @@ int main(argc, argv)
   if (argc > 1) {
     do_adjust = atoi(argv[1]);
   }
-  p1 = (int *) alloca(sizeof *p1);
-  p2 = (int *) alloca(sizeof *p2); /* p1 - 0x20: stack-align=32 since gcc-4 */
+  p1 = (int *)alloca(sizeof *p1);
+  p2 = (int *)alloca(sizeof *p2); /* p1 - 0x20: stack-align=32 since gcc-4 */
   grows_downward = (p1 - p2 > 0 ? 1 : 0);
   one_by_one = (p1 - p2 == (grows_downward ? 1 : -1)); /* stack-align=4 */
   stack_align = abs((char*)p1 - (char*)p2);
@@ -244,12 +239,12 @@ int main(argc, argv)
   debprintf(("compute adjust[0],stack_reserve,reverse\n"));
   one_arg = do_one_arg(NULL);
   do_adjust = adjust[0];
-  debprintf(("one_arg=%d,reverse=%d,adjust=[%d,%d]\n",
-	     one_arg,reverse,adjust[0],adjust[1]));
+  debprintf(("one_arg=%d,reverse=%d,adjust=[%d,%d],stack_reserve=%d\n",
+	     one_arg,reverse,adjust[0],adjust[1],stack_reserve));
   if (!one_arg) {
     if (reverse) {
       do_reverse = reverse ^ (one_by_one ? grows_downward : 0);
-      debprintf(("try with computed adjust[0] and reverse=%d\n",
+      debprintf(("try again with computed adjust[0] and reverse=%d\n",
 		 do_reverse));
       one_arg = do_one_arg(NULL);
       do_adjust = adjust[0];
@@ -258,7 +253,7 @@ int main(argc, argv)
     }
     else if (stack_reserve || do_adjust) {
       if (stack_reserve)
-	debprintf(("try with computed do_adjust=%d and stack_reserve=%d\n",
+	debprintf(("try again with computed do_adjust=%d and stack_reserve=%d\n",
 		   do_adjust, stack_reserve));
       else
 	debprintf(("try with computed do_adjust=%d\n",
@@ -269,11 +264,16 @@ int main(argc, argv)
     }
   }
 
-  debprintf(("verify and compute adjust[1] for more args\n"));
+  debprintf(("verify and compute adjust[1] for more args, do_adjust=%d\n",
+	     do_adjust));
   three_args = do_three_args(0, NULL, 0.0);
-  debprintf(("three_args=%d,adjust=[%d,%d]\n",three_args,adjust[0],adjust[1]));
+  debprintf(("three_args=%d,stack_reserve=%d,adjust=[%d,%d]\n",
+	     three_args,stack_reserve,adjust[0],adjust[1]));
   debprintf(("adjust[1] maybe different?\n"));
-  if (! one_arg || ! three_args) {
+  no_arg = do_no_arg();
+  debprintf(("no_arg=%d,stack_reserve=%d,adjust=[%d,%d]\n",
+	     no_arg,stack_reserve,adjust[0],adjust[1]));
+  if (! one_arg || ! three_args || !no_arg) {
     if (adjust[0] != 0) {
       do_adjust = adjust[1];
       one_arg = do_one_arg(NULL);
@@ -282,6 +282,9 @@ int main(argc, argv)
       three_args = do_three_args(0, NULL, 0.0);
       debprintf(("three_args=%d,adjust=[%d,%d],do_adjust=%d\n",
 		 three_args,adjust[0],adjust[1],do_adjust));
+      no_arg = do_no_arg();
+      debprintf(("no_arg=%d,stack_reserve=%d,adjust=[%d,%d]\n",
+		 no_arg,stack_reserve,adjust[0],adjust[1]));
     }
   }
 
@@ -295,9 +298,12 @@ int main(argc, argv)
     three_args = do_three_args(0, NULL, 0.0);
     debprintf(("three_args=%d,adjust=[%d,%d],reverse=%d\n",
 	      three_args,adjust[0],adjust[1],reverse));
+    no_arg = do_no_arg();
+    debprintf(("no_arg=%d,stack_reserve=%d,adjust=[%d,%d]\n",
+	       no_arg,stack_reserve,adjust[0],adjust[1]));
   }
 
-  if (one_arg && three_args) {
+  if (one_arg && three_args && no_arg) {
     fp = fopen("cdecl.h", "w");
     if (fp == NULL) {
       return 1;

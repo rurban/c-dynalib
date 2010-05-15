@@ -219,8 +219,8 @@ sub pretest {
     };
     my $cant = sub {
 	&$cleanup;
-	print ("I don't know how run the test program,\n",
-	       "so I'll try to find a default configuration.\n")
+	print "I don't know how run the test program,\n",
+	      "so I'll try to find a default configuration.\n"
 	    if $Verbose;
 	return undef;
     };

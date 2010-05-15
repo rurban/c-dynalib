@@ -1,5 +1,4 @@
 Changes
-lib/C/DynaLib.pm
 DynaLib.xs
 MANIFEST
 Makefile.PL
@@ -15,6 +14,8 @@ sparc.c
 stdcall.c
 testcall.c
 testreverse.c
+lib/C/DynaLib.pm
+lib/C/DynaLib/Parse.pm
 lib/C/DynaLib/PerlTypes.pm
 lib/C/DynaLib/Struct.pm
 Asm-0.01.tar.gz

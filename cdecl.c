@@ -8,9 +8,9 @@
  */
 static int
 cdecl_pray(ax, items, func)
-I32 ax;		/* used by the ST() macro */
-I32 items;
-void *func;
+     I32 ax;		/* used by the ST() macro */
+     I32 items;
+     void *func;
 {
 #ifdef USE_THREADS
   dTHR;

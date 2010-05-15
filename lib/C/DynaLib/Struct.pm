@@ -1,5 +1,7 @@
 package C::DynaLib::Struct;
 require 5.002;
+use C::DynaLib;
+use C::DynaLib::Parse;
 
 =head1 NAME
 
@@ -211,39 +213,69 @@ sub Parse {
   my $definition = shift;
   $definition = shift if $definition eq 'C::DynaLib::Struct';
   my $c;
-  require Convert::Binary::C;
-  Convert::Binary::C->import;
-  if (ref $definition eq 'Convert::Binary::C') {
-    $c = $definition;
-    $c->parse(@_);
-  } else {
-    require C::DynaLib::PerlTypes;
-    $c = Convert::Binary::C->new(%$C::DynaLib::PerlTypes::PerlTypes);
-    $c->parse($definition, @_);
-  }
-  # all structs and unions
-  for my $s ($c->compound) {
-    my $record = $s->{identifier};
-    if (defined (${"${record}::template"})) {
-      carp "Redefinition of ".$s->{type}." $record\n";
+  if (eval "require Convert::Binary::C;") {
+    Convert::Binary::C->import;
+    if (ref $definition eq 'Convert::Binary::C') {
+      $c = $definition;
+      $c->parse(@_);
+    } else {
+      require C::DynaLib::PerlTypes;
+      $c = Convert::Binary::C->new(%$C::DynaLib::PerlTypes::PerlTypes);
+      $c->parse($definition, @_);
     }
-    my @members = _members(@{$s->{declarations}});
-    Define C::DynaLib::Struct($record, _packnames(@{$s->{declarations}}), \@members);
+    # all structs and unions
+    for my $s ($c->compound) {
+      my $record = $s->{identifier};
+      if (defined (${"${record}::template"})) {
+	carp "Redefinition of ".$s->{type}." $record\n";
+      }
+      my @members = _members(@{$s->{declarations}});
+      Define C::DynaLib::Struct($record,
+				_pack_names(@{$s->{declarations}}),
+				\@members);
+    }
+  } else {
+    # use GCC::TranslationUnit
+    my $node = C::DynaLib::Parse::GCC_prepare($definition);
+    while ($node) {
+      if ($node->isa('GCC::Node::function_decl')) {
+	declare_func C::DynaLib::Parse::process_func($node);
+      }
+      if ($node->isa('GCC::Node::record_type')) {
+	declare_struct C::DynaLib::Parse::process_struct($node);
+      }
+    } continue {
+      $node = $node->chain;
+    }
+  POST:
+    while ($node = shift @C::DynaLib::Parse::post) {
+      if ($node->isa('GCC::Node::record_type')) {
+	declare_struct C::DynaLib::Parse::process_struct($node);
+      }
+    }
   }
+}
+
+sub declare_func {
+  my $decl = shift;
+  C::DynaLib::DeclareSub($decl->{name},
+			 C::DynaLib::Parse::pack_types($decl->{retn}),
+			 C::DynaLib::Parse::pack_types($decl->{parms}));
+}
+
+sub declare_struct {
+  my $decl = shift;
+  Define C::DynaLib::Struct($decl->{name},
+			    $decl->{packnames},
+			    $decl->{members});
 }
 
 sub _members {
   map {my $decl=$_->{declarators}[0]->{declarator}; $decl=~s/^\*//; $decl} @_;
 }
-sub _packnames {
-  my $types =
-    { int => 'i',
-      double => 'd',
-      char   => 'c',
-      long   => 'l',
-      short  => 's',
-    };
-  join "", map {$types->{$_->{type}}} @_;
+
+sub _pack_names {
+  C::DynaLib::Parse::pack_types (map {$_->{type}} @_);
 }
 
 1;
