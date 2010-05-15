@@ -25,6 +25,10 @@ extern "C" {
 #define DYNALIB_NUM_CALLBACKS 0
 #endif
 
+#ifdef DYNALIB_USE_cdecl6
+# define DYNALIB_DECL "cdecl6"
+# include "cdecl6.c"
+#endif
 #ifdef DYNALIB_USE_cdecl3
 # define DYNALIB_DECL "cdecl3"
 # include "cdecl3.c"

@@ -8,13 +8,16 @@ use strict;
 use vars qw(@ISA @EXPORT_OK);
 use Exporter 'import';
 @ISA = qw(Exporter);
-@EXPORT_OK = qw(pack_types process_struct process_func);
+@EXPORT_OK = qw(pack_types process_struct process_func
+		declare_func declare_struct
+	      );
 
 use GCC::TranslationUnit;
 use File::Temp;
 use Config;
 use C::DynaLib;
 
+#sub PTR_TYPE { C::DynaLib::PTR_TYPE }
 our @post;
 my %records;
 
@@ -158,7 +161,7 @@ sub pack_types {
      'signed long'    => 'l',
      'signed short'   => 's',
      'char*' => 'p',
-     'void*' => PTR_TYPE,
+     'void*' => &C::DynaLib::PTR_TYPE,
      'unsigned int'    => 'I',
      'unsigned char'   => 'C',
      'unsigned long'   => 'L',
@@ -166,7 +169,7 @@ sub pack_types {
      'long long'       => 'q',
      'unsigned long long' => 'Q',
     };
-  join "", map {defined $types->{$_} ? $types->{$_} : PTR_TYPE} @_;
+  join "", map {defined $types->{$_} ? $types->{$_} : &C::DynaLib::PTR_TYPE} @_;
 }
 
 

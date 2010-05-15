@@ -1,7 +1,8 @@
 package C::DynaLib::Struct;
 require 5.002;
 use C::DynaLib;
-use C::DynaLib::Parse;
+use C::DynaLib::Parse qw(pack_types declare_func declare_struct
+			 process_struct process_func);
 
 =head1 NAME
 
@@ -236,13 +237,13 @@ sub Parse {
     }
   } else {
     # use GCC::TranslationUnit
-    my $node = C::DynaLib::Parse::GCC_prepare($definition);
+    my $node = GCC_prepare($definition);
     while ($node) {
       if ($node->isa('GCC::Node::function_decl')) {
-	declare_func C::DynaLib::Parse::process_func($node);
+	declare_func process_func($node);
       }
       if ($node->isa('GCC::Node::record_type')) {
-	declare_struct C::DynaLib::Parse::process_struct($node);
+	declare_struct process_struct($node);
       }
     } continue {
       $node = $node->chain;
@@ -250,7 +251,7 @@ sub Parse {
   POST:
     while ($node = shift @C::DynaLib::Parse::post) {
       if ($node->isa('GCC::Node::record_type')) {
-	declare_struct C::DynaLib::Parse::process_struct($node);
+	declare_struct process_struct($node);
       }
     }
   }
@@ -259,8 +260,8 @@ sub Parse {
 sub declare_func {
   my $decl = shift;
   C::DynaLib::DeclareSub($decl->{name},
-			 C::DynaLib::Parse::pack_types($decl->{retn}),
-			 C::DynaLib::Parse::pack_types($decl->{parms}));
+			 pack_types($decl->{retn}),
+			 pack_types($decl->{parms}));
 }
 
 sub declare_struct {

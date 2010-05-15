@@ -7,7 +7,8 @@ use Config;
 my(@convention, $convention,
    $num_callbacks, %cflags, $object, $devnull,
    $conv_xs, $cbfunc_c, $cdecl_h, $postamble,
-   $is_gcc, $is_msvc, $is_borland, $is_dynamic, $Verbose);
+   $is_gcc, $is_msvc, $is_borland, $is_dynamic,
+   $is_win32, $Verbose);
 
 # $Verbose = 1;
 $conv_xs = "conv.xsi";
@@ -19,6 +20,7 @@ $is_gcc = $Config{cc} =~ /gcc/i && $Config{gccversion} >= 2;
 $is_msvc = ($^O eq 'MSWin32' and $Config{cc} =~ /^cl/i);
 $is_borland = $Config{cc} =~ /\bbcc/i;
 $is_dynamic = ($Config{usedl} eq 'define');
+$is_win32   = $^O =~ /MSWin32|cygwin/;
 use subs qw(write_conv write_cbfunc write_cdecl_h is_big_endian check_ieee_fp);
 
 $postamble = "
@@ -64,6 +66,7 @@ my $archname = $Config{archname};
 if (!$is_gcc and $Config{cc} =~ /^cc/) {
     my $test = `$Config{cc} -dumpversion`;
     $is_gcc = 1 if $test and $test eq $Config{gccversion}."\n";
+    $is_gcc = 1 if $test and !$is_gcc and $test =~ /^[34]./;
 }
 # TODO: support for the ia64 fastcall derivate (first four in regs, rest in args)
 unless (@convention) {
@@ -123,7 +126,7 @@ WriteMakefile(
 
     'PREREQ_PM' => {
         'Convert::Binary::C'   => 0.70, # 0.70 structs only
-	($is_gcc ? ('GCC::TranslationUnit' => 0) : ()),
+	($is_gcc ? ('GCC::TranslationUnit' => "1.00") : ()),
         'Test'         => 0,
         'Test::More'   => 0,
     },
@@ -134,8 +137,8 @@ WriteMakefile(
     ('META_MERGE'
      => {recommends =>
 	 {
-	  "GCC::TranslationUnit" => "1.00",
-	  "Convert::Binary::C"   => "0.70",
+	  "GCC::TranslationUnit" => "1.01",
+	  "Convert::Binary::C"   => "0.74",
 	 },
 	 resources =>
 	 {
@@ -283,10 +286,11 @@ PROG
     @candidate = ();
     push @candidate, "./testtest$self->{EXE_EXT} $devnull"
 	if !$is_msvc and !$Verbose;
+    push @candidate, "./testtest$self->{EXE_EXT}"
+      if !$is_msvc;
     push @candidate, "testtest$self->{EXE_EXT} $devnull"
 	unless $Verbose;
     push @candidate, "testtest$self->{EXE_EXT}";
-    push @candidate, "./testtest$self->{EXE_EXT}" if !$is_msvc;
     push @candidate, "run testtest$self->{EXE_EXT}";
 
     unlink ("testtest.txt");
@@ -362,13 +366,23 @@ sub make_postamble {
     print "Writing $cdecl_h\n";
     if (write_cdecl_h($self)) {
 	unless (@convention) {
-	    # check if cdecl or cdecl3
+	    # check cdecl/cdecl3/cdecl6
 	    local $/;
 	    open F, "<", $cdecl_h;
 	    my $file = <F>;
 	    my ($cdecl3) = $file =~ /CDECL_STACK_RESERVE (\d)/;
+	    my ($reverse) = $file =~ /CDECL_REVERSE (\d)/;
 	    close F;
-	    @convention = $cdecl3 ? ('cdecl3') : ('cdecl');
+	    if ($cdecl3 == 3) {
+		@convention = ('cdecl3');
+	    } elsif ($cdecl3 == 6) {
+		@convention = ('cdecl6');
+	    } else {
+		@convention = ('cdecl');
+	    }
+	    if ($reverse or $is_win32) {
+		push @convention, 'stdcall';
+	    }
 	}
     } elsif (@convention) {
 	print "Can't figure out this system.  I'll have to guess.\n"
@@ -464,6 +478,32 @@ sub write_cdecl_h {
 	$cmd =~ s/-DNARF/$defines/g;
 	$cmd .= " -g" if $is_gcc;
 	$cmd .= " -DVERBOSE" if $Verbose;
+	if ($is_gcc and $Verbose) { # expand DO_CALL for gdb
+	    $cmd =~ s/-o testcall/-o testcall.E.c -E/;
+	    print "$cmd\n" if $Verbose;
+	    system ($cmd);
+	    if ($? == 0 && -f "testcall.E.c") {
+		# add \n to DO_CALL and fix linenumbers for gdb
+		open IN, "<", "testcall.E.c";
+		open OUT, ">", "testcall.E1.c";
+		while (<IN>){
+		    if (/^# (\d+) "testcall.E1.c"$/) {
+			if ($1 > 50) {
+			    s/^.*$//;
+			    next;
+			}
+		    }
+		    s/^# (\d+) "testcall.c"/# $. "testcall.E1.c"/;
+		    if (/ char \*arg; int i; void \*d1/) {
+			s/(;|\{|\}) /$1\n\t/g;
+		    }
+		    print OUT;
+		}
+		close IN;
+		close OUT;
+		$cmd =~ s/testcall.c -o testcall.E.c -E/testcall.E1.c -o testcall/;
+	    }
+	}
 	unlink ("testcall$self->{EXE_EXT}", $cdecl_h);
 	print "$cmd\n" if $Verbose;
 	system ($cmd);

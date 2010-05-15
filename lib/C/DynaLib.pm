@@ -211,38 +211,48 @@ sub DeclareSub {
 }
 
 sub Parse {
-  my $is_gcc = $Config{cc} =~ /gcc/i && $Config{gccversion} >= 3;
-  if (!$is_gcc and $Config{cc} =~ /^cc/) {
-    my $test = `$Config{cc} -dumpversion`;
-    $is_gcc = 1 if $test and $test eq $Config{gccversion}."\n";
+  my $self = shift;
+  my $is_method = ref($self) && eval { $self->isa("C::DynaLib") };
+  $@ and $is_method = (ref($self) eq 'C::DynaLib');
+  my $first = ($is_method ? shift : $self);
+  my ($code,$cc,$inc,$filter);
+  if (ref($first) eq 'HASH') {
+    $code = $first->{code} or die "code missing\n";
+    $cc = $first->{cc} || "gcc";
+    $inc = $first->{inc};
+    $filter = $first->{filter};
+    $cc = "$cc -I$inc" if $inc;
+  } else {
+    $code = $first;
+    $cc = shift;
+    $filter = shift;
   }
-  warn "Parse needs a gcc with -fdump-translation-unit or gccxml\n"
-    unless $is_gcc;
-
-}
-
-sub _pack_types {
-  my $types =
+  require C::DynaLib::Parse;
+  C::DynaLib::Parse->import qw(declare_func declare_struct
+			       pack_types process_struct process_func);
+  my $node = GCC_prepare($code, $cc);
+  while ($node) {
+    if ($node->isa('GCC::Node::function_decl')
+	and ($filter ? $node->name->identifier =~ /$filter/
+	     : $node->name->identifier !~ /^_/))
     {
-     int     => 'i',
-     double  => 'd',
-     char    => 'c',
-     long    => 'l',
-     short   => 's',
-     'signed int'     => 'i',
-     'signed char'    => 'c',
-     'signed long'    => 'l',
-     'signed short'   => 's',
-     'char*' => 'p',
-     'void*' => PTR_TYPE,
-     'unsigned int'    => 'I',
-     'unsigned char'   => 'C',
-     'unsigned long'   => 'L',
-     'unsigned short'  => 'S',
-     'long long'       => 'q',
-     'unsigned long long' => 'Q',
-    };
-  join "", map {defined $types->{$_} ? $types->{$_} : PTR_TYPE} @_;
+      declare_func process_func($node);
+    }
+    if ($node->isa('GCC::Node::record_type')
+	and ($filter ? $node->name->identifier =~ /$filter/
+	     : $node->name->identifier !~ /^_/))
+    {
+      declare_struct process_struct($node);
+    }
+  } continue {
+    $node = $node->chain;
+  }
+ POST:
+  while ($node = shift @C::DynaLib::Parse::post) {
+    if ($node->isa('GCC::Node::record_type')) {
+      declare_struct process_struct($node);
+    }
+  }
 }
 
 sub my_carp {

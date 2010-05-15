@@ -83,12 +83,12 @@ int test(I32 b0,I32 b1,I32 b2,I32 b3,I32 b4,I32 b5,I32 b6,I32 b7,I32 b8)
   debprintf(("b0-8: %08x,%08x,%08x,%08x,%08x,%08x,%08x,%08x,%08x\n", 
 	     b0,b1,b2,b3,b4,b5,b6,b7,b8));
   /* cdecl3 tests: */
-  /* gcc amd64: do_adjust=-24, stack_reserve=4 (first 4 args in regs) */
+  /* gcc amd64: do_adjust=-24, stack_reserve=6 (first 6 args in regs) */
   if ((sizeof(int*) == 8) && (a[0] == b6) && (a[2] == b7)) {
     *which = -24;      /* 3*sizeof(void*) */
     arg_align = 8;
 #ifdef __GNUC__
-    stack_reserve = 4;
+    stack_reserve = 6;
 #endif
     debprintf(("test arg_align=4->8:adjust=-24,stack_reserve=%d (0-6, 2-8)\n",
 	       stack_reserve));
@@ -126,7 +126,7 @@ int test(I32 b0,I32 b1,I32 b2,I32 b3,I32 b4,I32 b5,I32 b6,I32 b7,I32 b8)
   if (one_by_one) {							\
     for (i = 8; i >= 0; i--) {						\
       arg = (char *)alloca(sizeof (I32));				\
-      Copy(&a[do_reverse ? 8-i : i], arg, sizeof (I32), char);		\
+      Copy(&a[do_reverse ? 8-i : i], arg, sizeof(I32), char);		\
     }									\
   }									\
   else {								\
@@ -138,8 +138,10 @@ int test(I32 b0,I32 b1,I32 b2,I32 b3,I32 b4,I32 b5,I32 b6,I32 b7,I32 b8)
 	/* amd64 aligns to 8, so zero the values of smaller args.	\
 	   http://blogs.msdn.com/oldnewthing/archive/2004/01/14/58579.aspx \
 	*/								\
+	/*debprintf(("  memzero(arg=%x, arg_align=%d)\n", arg, arg_align));*/ \
 	memzero(arg, arg_align);					\
       }									\
+      /*debprintf(("  memcpy(arg=%x,a[%d]=%08x)\n", arg, i, a[i]));*/	\
       memcpy(arg,(const char*)&a[do_reverse ? 8-i : i], sizeof(I32));	\
       /*Copy(&a[do_reverse ? 8-i : i], arg, sizeof(I32), char);*/	\
       arg += arg_align;							\
@@ -160,9 +162,17 @@ int test(I32 b0,I32 b1,I32 b2,I32 b3,I32 b4,I32 b5,I32 b6,I32 b7,I32 b8)
     Copy(&a[do_reverse ? 8-1 : 1], &d2, sizeof(I32), char);		\
     Copy(&a[do_reverse ? 8-2 : 2], &d3, sizeof(I32), char);		\
     Copy(&a[do_reverse ? 8-3 : 3], &d4, sizeof(I32), char);		\
-    Copy(&a[do_reverse ? 8-3 : 4], &d5, sizeof(I32), char);		\
-    Copy(&a[do_reverse ? 8-3 : 5], &d6, sizeof(I32), char);		\
+    Copy(&a[do_reverse ? 8-4 : 4], &d5, sizeof(I32), char);		\
+    Copy(&a[do_reverse ? 8-5 : 5], &d6, sizeof(I32), char);		\
     return ((int (*)()) test)(d1,d2,d3,d4,d5,d6);			\
+  }									\
+  else if (stack_reserve == 5) {					\
+    Copy(&a[do_reverse ? 8-0 : 0], &d1, sizeof(I32), char);		\
+    Copy(&a[do_reverse ? 8-1 : 1], &d2, sizeof(I32), char);		\
+    Copy(&a[do_reverse ? 8-2 : 2], &d3, sizeof(I32), char);		\
+    Copy(&a[do_reverse ? 8-3 : 3], &d4, sizeof(I32), char);		\
+    Copy(&a[do_reverse ? 8-4 : 4], &d5, sizeof(I32), char);		\
+    return ((int (*)()) test)(d1,d2,d3,d4,d5);			\
   }									\
   else if (stack_reserve == 4) {					\
     /* amd64 uses rdi,rdx,rcx,rbx for first 4 args */			\
@@ -224,6 +234,9 @@ int main(argc, argv)
 #endif
   if (argc > 1) {
     do_adjust = atoi(argv[1]);
+    if (argc > 2) {
+      stack_reserve = atoi(argv[2]);
+    }
   }
   p1 = (int *)alloca(sizeof *p1);
   p2 = (int *)alloca(sizeof *p2); /* p1 - 0x20: stack-align=32 since gcc-4 */
