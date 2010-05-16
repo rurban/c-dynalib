@@ -380,8 +380,34 @@ Poke(dest, data)
 	}
 
 BOOT:
-	/* $C::DynaLib::decl = cdecl or hack30 or ...; */
-	sv_setsv(get_sv("C::DynaLib::decl", 1), newSVpv(DYNALIB_DECL, 0));
+      {
+	/* @C::DynaLib::decl */
+	AV* av = get_av("C::DynaLib::decl", GV_ADD);
+#ifdef DYNALIB_USE_cdecl6
+	av_push(av, newSVpv("cdecl6",0));
+#endif
+#ifdef DYNALIB_USE_cdecl3
+	av_push(av, newSVpv("cdecl3",0));
+#endif
+#ifdef DYNALIB_USE_cdecl
+	av_push(av, newSVpv("cdecl ",0));
+#endif
+#ifdef DYNALIB_USE_sparc
+	av_push(av, newSVpv("sparc",0);
+#endif
+#ifdef DYNALIB_USE_alpha
+	av_push(av, newSVpv("alpha",0));
+#endif
+#ifdef DYNALIB_USE_hack30
+	av_push(av, newSVpv("hack30",0));
+#endif
+#ifdef DYNALIB_USE_stdcall
+	av_push(av, newSVpv("stdcall",0));
+#endif
+
+	/* $C::DynaLib::decl = cdecl,hack30,... */
+	sv_setsv(get_sv("C::DynaLib::decl", GV_ADD), newSVpv(DYNALIB_DEFAULT_CONV, 0));
 
 	/* Setup the callback config array. */
 	sv_setsv(SvRV(ST(2)), newRV((SV*) sv_2mortal(cb_init(ST(2)))));
+      }

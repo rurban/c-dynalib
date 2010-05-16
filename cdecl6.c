@@ -3,7 +3,7 @@
 
 /*
  * Convert Perl sub args to C args and pass them to (*func)().
- * Special case gcc x86_64 with passing 4 args in regs and 2 more protected.
+ * Special slow case gcc for x86_64 with passing 6 args in regs.
  */
 static int
 cdecl6_pray(ax, items, func)

@@ -8,9 +8,11 @@ my(@convention, $convention,
    $num_callbacks, %cflags, $object, $devnull,
    $conv_xs, $cbfunc_c, $cdecl_h, $postamble,
    $is_gcc, $is_msvc, $is_borland, $is_dynamic,
-   $is_win32, $Verbose);
+   $is_win32, $Verbose,
+   $stack_reserve, $stack_adjust, $stack_align,
+   $do_reverse);
 
-# $Verbose = 1;
+my $Cpp; # run testcall through -E 
 $conv_xs = "conv.xsi";
 $cbfunc_c = "cbfunc.c";
 $cdecl_h = "cdecl.h";
@@ -55,10 +57,14 @@ for (@ARGV) {
     /^CALLBACKS=(\d+)$/ and $num_callbacks = $1;
     /^(-D.*)(?:\=(.*))?$/ and $cflags{$1} = $2;
     /^Verbose$/i and $Verbose = 1;
+    /^Cpp$/i and $Cpp = 1;
+    /^STACK_RESERVE=(\d+)$/ and $stack_reserve = $1;
+    /^STACK_ADJUST=(\d+)$/ and $stack_adjust = $1;
+    /^STACK_ALIGN=(\d+)$/ and $stack_align = $1;
 }
 
 # Appease MakeMaker:
-@ARGV = grep { !/^(DECL=|CALLBACKS=(\d+)$|-D.)/ } @ARGV;
+@ARGV = grep { !/^(DECL=|CALLBACKS=\d+$|-D.|STACK_\w+=\d+)/ } @ARGV;
 
 my $ccflags = $Config{ccflags};
 my $archname = $Config{archname};
@@ -68,7 +74,7 @@ if (!$is_gcc and $Config{cc} =~ /^cc/) {
     $is_gcc = 1 if $test and $test eq $Config{gccversion}."\n";
     $is_gcc = 1 if $test and !$is_gcc and $test =~ /^[34]./;
 }
-# TODO: support for the ia64 fastcall derivate (first four in regs, rest in args)
+# TODO: support more fastcall derivates (ia64,amd64: first four in regs, rest in args)
 unless (@convention) {
     for (
 	 #[ '^i?[x3-6]86', sub {'cdecl'} ],
@@ -83,8 +89,8 @@ unless (@convention) {
 			  $object .= " alpha-cc.o";
 			}
 			'alpha'} ],
-	 #[ 'win32', sub {'cdecl'} ],
-	 #[ '^cygwin-thread-multi-64int', sub {my $CDECL_ADJUST = -32; 'cdecl'} ],
+	 #[ 'win32', sub {('cdecl','stdcall')} ],
+	 #[ '^cygwin', sub {my $CDECL_ADJUST = -32; ('cdecl','stdcall')} ],
 	 [ '', sub { () } ],
 	 )
     { @convention = &{$_->[1]}, last if $archname =~ /$_->[0]/i }
@@ -107,7 +113,7 @@ if ($is_gcc and $ccflags =~ /-DDEBUGGING/) {
     $optimize .= " -g";
 }
 #if ($is_gcc and $ccflags !~ /omit-frame-pointer/) {
-#    # but it does not work as expected on linux+win32
+#    # but it does not work as expected on linux+win32. use the same as perl
 #    $optimize .= " -fomit-frame-pointer";
 #}
 
@@ -306,7 +312,7 @@ sub guess_cdecl_h {
     my $self = shift;
     open CONFIG, ">$cdecl_h" or die "can't write $cdecl_h";
 
-    my $do_reverse = 0;
+    $do_reverse = 0;
     print "Testing stack layout...\n" if $Verbose;
     $self->{how_to_compile} =~ s/testtest/testreverse/g;
     $self->{how_to_run} =~ s/testtest/testreverse/g;
@@ -382,27 +388,37 @@ sub make_postamble {
 	    }
 	    if ($reverse or $is_win32) {
 		push @convention, 'stdcall';
+		print "Using conventions: @convention\n"; 
 	    }
 	}
     } elsif (@convention) {
 	print "Can't figure out this system.  I'll have to guess.\n"
 	    if $Verbose;
 	guess_cdecl_h($self);
+	append_convert_defines_cdecl($cdecl_h);
+	if ($do_reverse) {
+	    push @convention, 'stdcall';
+	    print "Using conventions: @convention\n"; 
+	}
+	elsif ($is_win32) {
+	    push @convention, 'stdcall', 'hack30';
+	    print "Using conventions: @convention\n"; 
+	}
     } else {
 	print <<WARN;
 ***
 *** WARNING
 ***
-*** I can't figure out the correct way to pass arguments to a C function
+*** I can not figure out the correct way to pass arguments to a C function
 *** on this system.  This may be due to porting issues, a perl installation
 *** problem, or any number of things.  Maybe 'perl Makefile.PL Verbose'
 *** will shed some light.
 ***
-*** I'll use the `hack30' calling convention, which may work some or most
+*** I will use the "hack30" calling convention, which may work some or most
 *** of the time for integers alike. Or it may crash your programs. A better 
-*** solution would be to add support for your system's calling convention.
+*** solution would be to add support for your systems calling convention.
 ***
-*** See DynaLib.pm for a discussion of hack30.
+*** See perldoc lib/C/DynaLib.pm for a discussion of "hack30".
 ***
 WARN
 	@convention = ('hack30');
@@ -432,8 +448,8 @@ sub MY::postamble {
 
     print "Using calling convention(s): @convention\n"
       if $Verbose;
-    for (@convention) { 
-      $cflags{"-DDYNALIB_DECL=\\\"$_\\\""} = undef;
+    for (@convention) {
+      # $cflags{"-DDYNALIB_DECL=\\\"$_\\\""} = undef;
       $cflags{"-DDYNALIB_USE_$_"} = undef;
     }
 
@@ -478,8 +494,8 @@ sub write_cdecl_h {
 	$cmd =~ s/-DNARF/$defines/g;
 	$cmd .= " -g" if $is_gcc;
 	$cmd .= " -DVERBOSE" if $Verbose;
-	if ($is_gcc and $Verbose) { # expand DO_CALL for gdb
-	    $cmd =~ s/-o testcall/-o testcall.E.c -E/;
+	if ($is_gcc and $Cpp) { # expand DO_CALL for gdb
+	    $cmd =~ s/-o\s+testcall/-o testcall.E.c -E -P/;
 	    print "$cmd\n" if $Verbose;
 	    system ($cmd);
 	    if ($? == 0 && -f "testcall.E.c") {
@@ -501,7 +517,7 @@ sub write_cdecl_h {
 		}
 		close IN;
 		close OUT;
-		$cmd =~ s/testcall.c -o testcall.E.c -E/testcall.E1.c -o testcall/;
+		$cmd =~ s/testcall.c -o testcall.E.c -E -P/testcall.E1.c -o testcall/;
 	    }
 	}
 	unlink ("testcall$self->{EXE_EXT}", $cdecl_h);

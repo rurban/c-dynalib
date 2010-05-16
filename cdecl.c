@@ -15,6 +15,7 @@ cdecl_pray(ax, items, func)
 #ifdef USE_THREADS
   dTHR;
 #endif
+  /* DYNALIB_ARGSTART = 3 because of three locals here. */
   STRLEN arg_len;
   char *arg_scalar, *arg_on_stack;
   register int i;
@@ -39,23 +40,20 @@ cdecl_pray(ax, items, func)
   }
   arg_on_stack = (char *) alloca(total_arg_len);
   arg_on_stack += CDECL_ADJUST;
-#if 0
-  if (sizeof(void*) == 8) {
-      memzero(arg_on_stack, total_arg_len);
-  }
-#endif
 #if CDECL_REVERSE
   for (i = items - 1; i >= DYNALIB_ARGSTART; i--) {
 #else  /* ! CDECL_REVERSE */
   for (i = DYNALIB_ARGSTART; i < items; i++) {
 #endif  /* ! CDECL_REVERSE */
     arg_scalar = SvPV(ST(i), arg_len);
-    if (sizeof(void*) == 8 && arg_len < 8) { 
-      /* amd64 aligns to 8, so zero the values of smaller args.
+#ifdef __x86_64__
+    if (arg_len < 8) { 
+      /* x86_64 aligns to 8 non zero-filled.
 	 http://blogs.msdn.com/oldnewthing/archive/2004/01/14/58579.aspx
       */
       memzero(arg_on_stack, 8);
     }
+#endif
     Copy(arg_scalar, arg_on_stack, arg_len, char);
     arg_on_stack += arg_len;
   }

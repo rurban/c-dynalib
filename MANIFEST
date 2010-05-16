@@ -9,6 +9,7 @@ alpha-cc.c
 alpha-cc.s
 cdecl.c
 cdecl3.c
+cdecl6.c
 hack30.c
 sparc.c
 stdcall.c

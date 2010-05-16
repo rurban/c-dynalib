@@ -257,20 +257,6 @@ sub Parse {
   }
 }
 
-sub declare_func {
-  my $decl = shift;
-  C::DynaLib::DeclareSub($decl->{name},
-			 pack_types($decl->{retn}),
-			 pack_types($decl->{parms}));
-}
-
-sub declare_struct {
-  my $decl = shift;
-  Define C::DynaLib::Struct($decl->{name},
-			    $decl->{packnames},
-			    $decl->{members});
-}
-
 sub _members {
   map {my $decl=$_->{declarators}[0]->{declarator}; $decl=~s/^\*//; $decl} @_;
 }
