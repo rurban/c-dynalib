@@ -540,54 +540,6 @@ sub write_cdecl_h {
     return undef;
 }
 
-sub append_convert_defines_cdecl {
-    my $cdecl_h = shift;
-    open CDECL, ">>", $cdecl_h
-      or die "Can't write file \"$cdecl_h\": $!\n";
-    print CDECL<<CDECL_H;
-
-typedef unsigned char uchar;
-typedef char *        char_p;
-typedef unsigned int  uint;
-
-enum {
-  TR_int,
-  TR_uint,
-  TR_I32,
-  TR_I16,
-  TR_char,
-  TR_U32,
-  TR_U16,
-  TR_uchar,
-  TR_Quad_t,
-  TR_Uquad_t,
-  TR_float,
-  TR_double,
-  TR_char_p,
-};
-
-typedef union {
-  int           v_int;
-  uint          v_uint;
-  I32           v_I32;
-  I16           v_I16;
-  char          v_char;
-  U32           v_U32;
-  U16           v_U16;
-  uchar         v_uchar;
-#ifdef HAS_QUAD
-  Quad_t        v_Quad_t;
-  Uquad_t       v_Uquad_t;
-#endif
-  float         v_float;
-  double        v_double;
-  char_p        v_char_p;
-} ret_stru;
-
-CDECL_H
-    close CDECL;
-}
-
 sub write_conv {
 
     # Write conv.xsi, to be included in DynaLib.xs
@@ -641,7 +593,7 @@ ${convention}_call_packed(symref, ret_type, ...)
 	    sv_setiv(sv, (IV) ${convention}_CALL(symref, char));
 	    break;
 	  case 'I' :
-	    sv_setuv(sv, (UV) ${convention}_CALL(symref, uint));
+	    sv_setuv(sv, (UV) ${convention}_CALL(symref, unsigned int));
 	    break;
 	  case 'L' :
 	    sv_setuv(sv, (UV) ${convention}_CALL(symref, U32));
@@ -650,7 +602,7 @@ ${convention}_call_packed(symref, ret_type, ...)
 	    sv_setuv(sv, (UV) ${convention}_CALL(symref, U16));
 	    break;
 	  case 'C' :
-	    sv_setuv(sv, (UV) ${convention}_CALL(symref, uchar));
+	    sv_setuv(sv, (UV) ${convention}_CALL(symref, unsigned char));
 	    break;
 #ifdef HAS_QUAD
 	  case 'q' :
@@ -676,10 +628,10 @@ ${convention}_call_packed(symref, ret_type, ...)
 	    break;
 	  case 'Z' :
 	  case 'p' :
-	    sv_setpv(sv, (char *) ${convention}_CALL(symref, char_p));
+	    sv_setpv(sv, (char *) ${convention}_CALL(symref, char*));
 	    break;
 	  case 'P' :
-	    sv_setpvn(sv, (unsigned char *) ${convention}_CALL(symref, char_p),
+	    sv_setpvn(sv, (unsigned char *) ${convention}_CALL(symref, char*),
 			  atoi(&ret_type[1]));
 	    break;
 	  default :
