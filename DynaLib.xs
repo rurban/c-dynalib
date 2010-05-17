@@ -6,8 +6,30 @@ extern "C" {
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
-#ifdef __cplusplus
+#ifdef __cplusplus+ /* Support Perls olders than 5.004.  */
 }
+#endif
+
+/* Support Perls olders than 5.004.  */
+#ifndef UV
+#  define UV IV
+#  define sv_setuv(sv,uv) sv_setnv(sv,(double)(unsigned long)(uv))
+#  ifndef U32
+#    define U32 I32
+#    define U16 I16
+#  endif
+#  ifndef POPu
+#    define POPu POPi
+#  endif
+#  ifndef UV_MAX
+#    define UV_MAX ((UV) -1)
+#  endif
+#  ifndef IV_MAX
+#    define IV_MAX ((IV) ((UV_MAX - 1) / 2))
+#  endif
+#  ifndef IV_MIN
+#    define IV_MIN (-1 - IV_MAX)
+#  endif
 #endif
 
 /* Why isn't in_eval defined with PERL_POLLUTE? */

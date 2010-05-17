@@ -12,7 +12,7 @@ my(@convention, $convention,
    $stack_reserve, $stack_adjust, $stack_align,
    $do_reverse);
 
-my $Cpp; # run testcall through -E 
+my $Cpp; # run testcall through -E -P (might break, just for debugging)
 $conv_xs = "conv.xsi";
 $cbfunc_c = "cbfunc.c";
 $cdecl_h = "cdecl.h";
@@ -90,7 +90,7 @@ unless (@convention) {
 			}
 			'alpha'} ],
 	 #[ 'win32', sub {('cdecl','stdcall')} ],
-	 #[ '^cygwin', sub {my $CDECL_ADJUST = -32; ('cdecl','stdcall')} ],
+	 [ '^cygwin', sub {my $CDECL_ADJUST = -32; ('cdecl','stdcall')} ],
 	 [ '', sub { () } ],
 	 )
     { @convention = &{$_->[1]}, last if $archname =~ /$_->[0]/i }
@@ -395,7 +395,6 @@ sub make_postamble {
 	print "Can't figure out this system.  I'll have to guess.\n"
 	    if $Verbose;
 	guess_cdecl_h($self);
-	append_convert_defines_cdecl($cdecl_h);
 	if ($do_reverse) {
 	    push @convention, 'stdcall';
 	    print "Using conventions: @convention\n"; 
@@ -503,6 +502,7 @@ sub write_cdecl_h {
 		open IN, "<", "testcall.E.c";
 		open OUT, ">", "testcall.E1.c";
 		while (<IN>){
+		    # line numbers stripped with -P, but keep this code.
 		    if (/^# (\d+) "testcall.E1.c"$/) {
 			if ($1 > 50) {
 			    s/^.*$//;
@@ -528,7 +528,6 @@ sub write_cdecl_h {
 	    print "$cmd\n" if $Verbose;
 	    system ($cmd);
 	    if ($? == 0 && -e $cdecl_h) {
-		append_convert_defines_cdecl($cdecl_h);
 		print "Succeeded.\n" if $Verbose;
 		return 1;
 	    }

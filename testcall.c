@@ -1,6 +1,6 @@
 /*
  * This program tries to generate an appropriate header file for
- * inclusion with cdecl.c or cdecl3.c.
+ * inclusion with a cdecl?.c.
  */
 
 #define main notmain
@@ -37,19 +37,26 @@ I32 a[] = { 225437, 616282, 3853003, 899434198, 86381619,
 
 int grows_downward;
 int reverse = 0;
-int stack_reserve = 0; /* cdecl3: private data on top of call stack added later, 
-			  cannot not be overwritten with alloca.
-			  New gcc ABI places in the 4 ptrs ahead 
-			  3 unwritable ptr, on 32+64bit */
 int stack_align;       /* diff between two alloca's, 0x20 or 1 */
 int one_by_one = 1;    /* stack_align = 1 pointer */
+int do_adjust = 0;     /* write beyond that from the alloca pointer */
+int stack_reserve = 0; /* cdecl3: private data on top of call stack added later, 
+			  which cannot not be overwritten with alloca.
+			  New gcc ABI places in the 4 ptrs ahead. 
+			  3 unwritable pointers on -m32 and -m64 */
 int arg_align  = sizeof(I32); /* size of an I32 arg on the call stack. 4 or 8 */
 int do_reverse = 0;
 int args_size[2];
 int adjust[]  = {0, 0};
-int do_adjust = 0;      /* write beyond that from the alloca pointer */
 
 int *which;
+/* no locals! 
+ * function locals need place on the stack, which forbids alloca 
+ * access to the function params. So we use globals.
+ */
+int i;
+char *arg;
+void *d1,*d2,*d3,*d4,*d5,*d6;
 
 void handler(int sig) {
   printf("abnormal exit 1\n");
@@ -57,14 +64,13 @@ void handler(int sig) {
     exit(1);
 }
 
-/*
-int test(b0, b1, b2, b3, b4, b5, b6, b7, b8)
+static int 
+test(b0, b1, b2, b3, b4, b5, b6, b7, b8)
      I32 b0, b1, b2, b3, b4, b5, b6, b7, b8;
-*/
+/*
 int test(I32 b0,I32 b1,I32 b2,I32 b3,I32 b4,I32 b5,I32 b6,I32 b7,I32 b8)
+*/
 {
-  int i;
-
   debprintf(("test: one_by_one=%d,do_adjust=%d,stack_reserve=%d,do_reverse=%d,arg_align=%d\n",
 	     one_by_one, do_adjust, stack_reserve, do_reverse, arg_align)); 
   if (b0 == a[0]
@@ -88,7 +94,7 @@ int test(I32 b0,I32 b1,I32 b2,I32 b3,I32 b4,I32 b5,I32 b6,I32 b7,I32 b8)
     *which = -24;      /* 3*sizeof(void*) */
     arg_align = 8;
 #ifdef __GNUC__
-    stack_reserve = 6;
+    stack_reserve = 6; /* XXX need a way to try that out. see handler */
 #endif
     debprintf(("test arg_align=4->8:adjust=-24,stack_reserve=%d (0-6, 2-8)\n",
 	       stack_reserve));
@@ -111,17 +117,26 @@ int test(I32 b0,I32 b1,I32 b2,I32 b3,I32 b4,I32 b5,I32 b6,I32 b7,I32 b8)
 		   i-4, do_adjust, *which));
 	break;
       }
+    } else {
+      if (a[i] == b7) {
+	if ((i == 7 || a[i-1] == b6) && (i == 8 || a[i+1] == b8)) {
+	  *which = (i - 4) * sizeof (I32);
+	  if (i>0 && b5 != a[i-2]) stack_reserve = i-1-stack_reserve;
+	  debprintf(("test %d,do_adjust=%d,stack_reserve=%d => which=%d\n",
+		     i-4, do_adjust, stack_reserve, *which));
+	  break;
+	}
+      }
     }
   }
   return 0;
 }
-
+/* same number of locals as in cdecl.c! DYNALIB_ARGSTART = 3 */
 #define DO_CALL								\
+  register int i;							\
   char *arg;								\
-  int i;								\
-  void *d1,*d2,*d3,*d4,*d5,*d6;						\
+  STRLEN arg_len;							\
   d1 = d2 = d3 = d4 = d5 = d6 = NULL;					\
-									\
   which = &adjust[0];							\
   if (one_by_one) {							\
     for (i = 8; i >= 0; i--) {						\
@@ -135,7 +150,7 @@ int test(I32 b0,I32 b1,I32 b2,I32 b3,I32 b4,I32 b5,I32 b6,I32 b7,I32 b8)
     arg += stack_reserve*sizeof(I32);					\
     for (i = stack_reserve; i < 9; i++) {				\
       if (arg_align > sizeof(I32)) {					\
-	/* amd64 aligns to 8, so zero the values of smaller args.	\
+	/* x86_64 aligns to 8 non zero-filled.				\
 	   http://blogs.msdn.com/oldnewthing/archive/2004/01/14/58579.aspx \
 	*/								\
 	/*debprintf(("  memzero(arg=%x, arg_align=%d)\n", arg, arg_align));*/ \
@@ -172,10 +187,10 @@ int test(I32 b0,I32 b1,I32 b2,I32 b3,I32 b4,I32 b5,I32 b6,I32 b7,I32 b8)
     Copy(&a[do_reverse ? 8-2 : 2], &d3, sizeof(I32), char);		\
     Copy(&a[do_reverse ? 8-3 : 3], &d4, sizeof(I32), char);		\
     Copy(&a[do_reverse ? 8-4 : 4], &d5, sizeof(I32), char);		\
-    return ((int (*)()) test)(d1,d2,d3,d4,d5);			\
+    return ((int (*)()) test)(d1,d2,d3,d4,d5);				\
   }									\
   else if (stack_reserve == 4) {					\
-    /* amd64 uses rdi,rdx,rcx,rbx for first 4 args */			\
+    /* amd64 uses rdi,rdx,rcx,rbx,r8,r9 for first 6 args */		\
     Copy(&a[do_reverse ? 8-0 : 0], &d1, sizeof(I32), char);		\
     Copy(&a[do_reverse ? 8-1 : 1], &d2, sizeof(I32), char);		\
     Copy(&a[do_reverse ? 8-2 : 2], &d3, sizeof(I32), char);		\
@@ -236,6 +251,9 @@ int main(argc, argv)
     do_adjust = atoi(argv[1]);
     if (argc > 2) {
       stack_reserve = atoi(argv[2]);
+      if (argc > 3) {
+	arg_align = atoi(argv[3]);
+      }
     }
   }
   p1 = (int *)alloca(sizeof *p1);
@@ -364,7 +382,11 @@ int main(argc, argv)
     fprintf(fp, "#define CDECL_STACK_RESERVE %d\n", stack_reserve);
     fprintf(fp, "#define CDECL_REVERSE %d\n",     do_reverse);
     fclose(fp);
-    debprintf(("cdecl%s ok\n", stack_reserve>0 ? "3" : ""));
+    if (stack_reserve > 0) {
+      debprintf(("cdecl%d ok\n",stack_reserve));
+    } else {
+      debprintf(("cdecl ok\n"));
+    }
     return 0;
   }
   debprintf(("cdecl failed\n"));
