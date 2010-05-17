@@ -227,8 +227,18 @@ sub Parse {
     # all structs and unions
     for my $s ($c->compound) {
       my $record = $s->{identifier};
-      if (defined (${"${record}::template"})) {
+      if (defined (${"${record}::template"})) { # already parsed
 	carp "Redefinition of ".$s->{type}." $record\n";
+      }
+      # Convert::Binary::C bug in 0.74
+      # fixup wrong declarations: 'char'(type) '*baz'(declarator) => 'char*' 'baz'
+      for (0..@{$s->{declarations}}) {
+	  my $d = $s->{declarations}->[$_];
+	  if (substr($d->{declarators}[0]->{declarator},0,1) eq '*') {
+	      $s->{declarations}->[$_]->{declarators}[0]->{declarator} = 
+		  substr($d->{declarators}[0]->{declarator},1);
+	      $s->{declarations}->[$_]->{type} .= "*";
+	  }
       }
       my @members = _members(@{$s->{declarations}});
       Define C::DynaLib::Struct($record,
