@@ -56,10 +56,11 @@ sub new {
   my $class = shift;
   my $libname = $_ = shift;
   scalar(@_) <= 1
-    or croak 'Usage: $lib = new C::DynaLib( $filename [, $flags] )';
+    or croak 'Usage: $lib = new C::DynaLib( $library [, $decl, $flags] )';
   my $so = $libname;
   -e $so or $so = DynaLoader::dl_findfile($libname) || $libname;
   my $lib;
+  my $decl = shift || $DefConv;
   $lib = DynaLoader::dl_load_file($so, @_) unless $so =~ /\.a$/;
   if (!$lib) {
     # Duplicate most of the DynaLoader code, since DynaLoader is
@@ -73,8 +74,10 @@ sub new {
         return bless \$lib, $class;
       }
       if ($^O eq 'MSWin32' and $lib =~ /^(c|m|msvcrt|msvcrt\.lib)$/) {
-        if ($lib = DynaLoader::dl_load_file($ENV{SYSTEMROOT}."\\System32\\MSVCRT.DLL", @_)) {
-          return bless \$lib, $class;
+        if ($lib = DynaLoader::dl_load_file($ENV{SYSTEMROOT}.
+					    "\\System32\\MSVCRT.DLL", @_))
+	{
+          return bless [$lib, $decl], $class;
         }
         push(@names, "MSVCRT.DLL","MSVCRT90","MSVCRT80","MSVCRT71","MSVCRT70",
              "MSVCRT60","MSVCRT40","MSVCRT20");
@@ -114,11 +117,15 @@ sub new {
       return undef unless $lib;
     }
   }
-  bless \$lib, $class;
+  bless [$lib, $decl], $class;
 }
 
 sub LibRef {
-  ${$_[0]};
+  ${$_->[0]};
+}
+
+sub LibDecl {
+  ${$_->[1]};
 }
 
 sub DESTROY {
@@ -139,7 +146,7 @@ sub DeclareSub {
   my $first = ($is_method ? shift : $self);
 
   my ($libref, $name, $ptr, @arg_type);
-  my ($convention, $ret_type) = ($DefConv, '');
+  my ($convention, $ret_type) = ($self->LibDecl, '');
 
   if (ref($first) eq 'HASH') {
 
@@ -355,12 +362,14 @@ C::DynaLib - Dynamic Perl interface to C compiled code.
   use C::DynaLib;
   use sigtrap;	# recommended
 
-  $lib = new C::DynaLib( $linker_arg );
+  $lib = new C::DynaLib( $library [, $decl, [$dlopen_flags]] );
 
   $func = $lib->DeclareSub( $symbol_name
 			    [, $return_type [, @arg_types] ] );
+  $result = &$func(@args);
   # or
   $func = $lib->DeclareSub( { "name" => $symbol_name,
+                              "decl" => 'stdcall',
 			      [param => $value,] ... } );
   $func = $lib->DeclareSub( $symbol_name, $ret, $params...);
   # or
@@ -370,8 +379,12 @@ C::DynaLib - Dynamic Perl interface to C compiled code.
   # or
   $func = DeclareSub( { "ptr" => $function_pointer,
 			[param => $value,] ... } );
-
   $result = $func->( @args );
+
+  my $user32 = new C::DynaLib( 'user32', 'stdcall' );
+  my $PostQuitMessage = §user32->DeclareSub("PostQuitMessageA",
+	"i",   # return type
+        "i");  # argument type(s)
 
   $callback = new C::DynaLib::Callback( \&my_sub,
 			$return_type, @arg_types );
@@ -422,15 +435,20 @@ corresponds to a Perl sub which may be accessed from C.
 
 =head2 C<new C::DynaLib> public constructor
 
-The argument to C<new> may be the file name of a dynamic library.
+The first argument to C<new> may be the file name or base name 
+of a dynamic library.
 Alternatively, a linker command-line argument (e.g., C<"-lc">) may be
-specified.  See L<DynaLoader(3)> for details on how such arguments are
+specified. See L<DynaLoader(3)> for details on how such arguments are
 mapped to file names.
 
+An optional 2nd argument may specify an alternate calling convention, 
+one of @C::DynaLib::decl. Default: $C::DynaLib::decl. This is usually 
+required for mingw or cygwin for 'stdcall'.
+
 Note: On cygwin or mingw the import library
-F</usr/lib/libC<lt>nameC<gt>.dll.a> contains the name of the .dll, so
--lC<lt>nameC<gt> is enough, and you don't have to use the versioned
-name of the dll. C<dllimport -I lib> will be used to get the dll name.
+F</usr/lib/lib"name".dll.a> contains the name of the .dll, so
+-l"name" is enough, and you don't have to use the versioned
+name of the dll. C<dllimport -I libname> will be used to get the dll name.
 
 On failure, C<new> returns C<undef>.  Error information I<might> be
 obtainable by calling C<DynaLoader::dl_error()>.
@@ -528,6 +546,7 @@ using L<C::DynaLib::Struct>.
 Allows you to specify a function's calling convention.  This is
 possible only with a named-parameter form of C<DeclareSub>. See below
 for information about the supported calling conventions.
+This overrides LibDecl().
 
 The global $C::DynaLib::decl holds the string for the current
 global declaration convention.
@@ -538,6 +557,13 @@ A library reference obtained from either C<DynaLoader::dl_load_file>
 or the C<C::DynaLib::LibRef> method. You must use a named-parameter
 form of C<DeclareSub> in order to specify this argument.
 
+=item ->LibDecl()
+
+Read the name of the calling convention in which this libary was 
+declared, the 2nd arg to new. Or the default calling convention.
+All functions in this library are called with this calling convention 
+by default,
+
 =back
 
 =head2 PTR_TYPE()
@@ -547,9 +573,9 @@ Type declaration for an opaque pointer, which is either "i", "q",
 
 If you want to use strings use "p" instead.
 
-=head2 $decl
+=head2 $DefConv
 
-Name of the currently used calling convention. See below.
+Name of the currently used default calling convention. See below.
 
 =head2 Parse( '<<EOS' ) - Parse macro, function and struct declarations c-style
 
@@ -565,7 +591,9 @@ The returned value of C<DeclareSub> is a code reference.  Calling
 through it results in a call to the C function.  See L<perlref(1)> on
 how to use code references.
 
-=head2 C::DynaLib::Callback( \&some_sub, $ret_type, @arg_types ) - Using callback routines
+=head2 C::DynaLib::Callback( \&some_sub, $ret_type, @arg_types )
+
+Using callback routines
 
 Some C functions expect a pointer to another C function as an
 argument.  The library code that receives the pointer may use it to
@@ -732,8 +760,6 @@ Note that the convention must match that of the function in the
 dynamic library, otherwise crashes or incorrect results are likely to
 occur.
 
-The current convention is in C<$C::DynaLib::decl>.
-
 =over 4
 
 =item C<cdecl>
@@ -745,15 +771,26 @@ The generated F<cdecl.h> contains some internal options for this
 declaration. Normal stack order is also detected and supported,
 though this is no strict _cdecl convention.
 
-=item C<cdecl3>
+=item C<cdecl3> or C<cdecl6>
 
 Same as C<cdecl>, but with special-casing a new gcc limitation that on
-function calls without args, the first three pointers alloca'd may not
-be overwritten. This is no calling convention, just a fastcall-like
-hack.
+function calls without args, the first three or six pointers alloca'd 
+are reserved, they may not be overwritten. 
+This is no calling convention, just a fastcall-like hack. 
+Argument types longer as the pointer-size will not work for the 
+first args, similar to 'hack30'. The subsequent args after the reserved 
+words may be longer (double, long double, long long, ...).
 
 The generated F<cdecl.h> contains some internal options for this
 declaration. CDECL_STACK_RESERVE = 1, 2, 3, 4 or 6.
+Valid names are only cdecl3 or cdecl6.
+
+=item C<cdecltr>
+
+Another variant of C<cdecl> with "typed return" values. 
+You can try to use this with C<perl Makefile.PL DECL=cdecltr> 
+if the default does not compile or work for non-register
+return values.
 
 =item C<sparc>
 

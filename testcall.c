@@ -131,11 +131,14 @@ int test(I32 b0,I32 b1,I32 b2,I32 b3,I32 b4,I32 b5,I32 b6,I32 b7,I32 b8)
   }
   return 0;
 }
+
 /* same number of locals as in cdecl.c! DYNALIB_ARGSTART = 3 */
-#define DO_CALL								\
+#define DO_INIT								\
   register int i;							\
   char *arg;								\
-  STRLEN arg_len;							\
+  STRLEN arg_len;
+
+#define DO_CALL								\
   d1 = d2 = d3 = d4 = d5 = d6 = NULL;					\
   which = &adjust[0];							\
   if (one_by_one) {							\
@@ -213,6 +216,7 @@ int test(I32 b0,I32 b1,I32 b2,I32 b3,I32 b4,I32 b5,I32 b6,I32 b7,I32 b8)
 
 int do_no_arg()
 {
+  DO_INIT;
   args_size[0] = 0;
   DO_CALL;
 }
@@ -220,6 +224,7 @@ int do_no_arg()
 int do_one_arg(x)
   char *x;
 {
+  DO_INIT;
   args_size[0] = sizeof(x);
   DO_CALL;
 }
@@ -229,6 +234,7 @@ int do_three_args(x, y, z)
   char *y;
   double z;
 {
+  DO_INIT;
   args_size[0] = sizeof(x)+sizeof(y)+sizeof(z);
   DO_CALL;
 }

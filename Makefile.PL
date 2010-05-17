@@ -74,32 +74,34 @@ if (!$is_gcc and $Config{cc} =~ /^cc/) {
     $is_gcc = 1 if $test and $test eq $Config{gccversion}."\n";
     $is_gcc = 1 if $test and !$is_gcc and $test =~ /^[34]./;
 }
-# TODO: support more fastcall derivates (ia64,amd64: first four in regs, rest in args)
+# TODO: support more fastcall derivates (ia64/x86_64: first six in regs, rest in args)
 unless (@convention) {
     for (
 	 #[ '^i?[x3-6]86', sub {'cdecl'} ],
 	 [ '^sun4-', sub {'sparc'} ],
 	 [ 'sparc', sub {'sparc'} ],
-	 [ '(alpha|axp)', sub {
-			unless ($is_gcc) {
-			  $postamble .= "\nalpha-cc\$(OBJ_EXT): alpha-cc.s\n"
-			    . "\t\$(CC) -c alpha-cc.s -o \$\@\n"
-			    . "\n#alpha-cc.s: alpha-cc.c\n"
-			    . "#\tgcc -O2 -S alpha-cc.c -o \$\@\n";
-			  $object .= " alpha-cc.o";
-			}
-			'alpha'} ],
-	 #[ 'win32', sub {('cdecl','stdcall')} ],
+	 [ '(alpha|axp)', 
+	   sub {
+	       unless ($is_gcc) {
+		   $postamble .= "\nalpha-cc\$(OBJ_EXT): alpha-cc.s\n"
+		       . "\t\$(CC) -c alpha-cc.s -o \$\@\n"
+		       . "\n#alpha-cc.s: alpha-cc.c\n"
+		       . "#\tgcc -O2 -S alpha-cc.c -o \$\@\n";
+		   $object .= " alpha-cc.o";
+	       }
+	       'alpha'} ],
+	 [ 'win32', sub {('cdecl','stdcall')} ],
 	 [ '^cygwin', sub {my $CDECL_ADJUST = -32; ('cdecl','stdcall')} ],
 	 [ '', sub { () } ],
 	 )
     { @convention = &{$_->[1]}, last if $archname =~ /$_->[0]/i }
 }
-# freebsd7 gcc3.4.6 cdecl ok one_by_one=0,do_adjust=0,stack_reserve=0,do_reverse=0,arg_align=4
-# freebsd7 gcc4.2.1 cdecl ok one_by_one=0,do_adjust=0,stack_reserve=0,do_reverse=0,arg_align=4
+# freebsd7 gcc3.4.6 cdecl ok   one_by_one=0,do_adjust=0,stack_reserve=0,do_reverse=0,arg_align=4
+# freebsd7 gcc4.2.1 cdecl ok   one_by_one=0,do_adjust=0,stack_reserve=0,do_reverse=0,arg_align=4
 # cygwin7  gcc4.3.4 cdecl3 ok  one_by_one=0,do_adjust=-16,stack_reserve=3,do_reverse=0,arg_align=4
 # mingw    gcc3.4.5 cdecl fail one_by_one=0,do_adjust=-16,stack_reserve=3,do_reverse=0,arg_align=4
-# msvc6    cl 12    cdecl ok one_by_one=1,do_adjust=0,stack_reserve=0,do_reverse=0,arg_align=4
+# msvc6    cl 12    cdecl ok   one_by_one=1,do_adjust=0,stack_reserve=0,do_reverse=0,arg_align=4
+# debian64 gcc4.4.4 cdecl6 ok  one_by_one=0,do_adjust=-16,stack_reserve=6,do_reverse=0,arg_align=8
 
 # Disable cc optimization
 my $optimize = $Config{optimize};
@@ -592,7 +594,7 @@ ${convention}_call_packed(symref, ret_type, ...)
 	    sv_setiv(sv, (IV) ${convention}_CALL(symref, char));
 	    break;
 	  case 'I' :
-	    sv_setuv(sv, (UV) ${convention}_CALL(symref, unsigned int));
+	    sv_setuv(sv, (UV) ${convention}_CALL(symref, uint));
 	    break;
 	  case 'L' :
 	    sv_setuv(sv, (UV) ${convention}_CALL(symref, U32));
@@ -601,7 +603,7 @@ ${convention}_call_packed(symref, ret_type, ...)
 	    sv_setuv(sv, (UV) ${convention}_CALL(symref, U16));
 	    break;
 	  case 'C' :
-	    sv_setuv(sv, (UV) ${convention}_CALL(symref, unsigned char));
+	    sv_setuv(sv, (UV) ${convention}_CALL(symref, uchar));
 	    break;
 #ifdef HAS_QUAD
 	  case 'q' :

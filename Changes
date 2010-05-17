@@ -2,11 +2,13 @@ Revision history for Perl extension C::DynaLib
 (formerly ExtUtils::DynaLib, very formerly CLib).
 
 0.61  2010-05-?? rurban
-	Added calling conventions cdecl3 (ok) and dummy stdcall (NYI)
+	Added calling conventions cdecl3, cdecl6, cdecltr ("typed return") 
+	  and dummy stdcall (NYI)
 	Fix t/win32.t
 	Better detect gcc
 	Improve perl Makefile.PL Verbose
-	Added experimental script/hparse.pl header parser
+	added experimental script/hparse.pl header parser
+        added sample script/cpuid,pl
         removed Test::Simple dependency
 	added repository http://github.com/rurban/c-dynalib
 	fix Quad issues introduced with 0.59

@@ -6,14 +6,16 @@ extern "C" {
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
-#ifdef __cplusplus+ /* Support Perls olders than 5.004.  */
+#ifdef __cplusplus
 }
 #endif
 
 /* Support Perls olders than 5.004.  */
 #ifndef UV
 #  define UV IV
-#  define sv_setuv(sv,uv) sv_setnv(sv,(double)(unsigned long)(uv))
+#  ifndef sv_setuv
+#    define sv_setuv(sv,uv) sv_setnv(sv,(double)(unsigned long)(uv))
+#  endif
 #  ifndef U32
 #    define U32 I32
 #    define U16 I16
@@ -47,6 +49,10 @@ extern "C" {
 #define DYNALIB_NUM_CALLBACKS 0
 #endif
 
+typedef unsigned char uchar;
+typedef char *        char_p;
+typedef unsigned int  uint;
+
 #ifdef DYNALIB_USE_cdecl6
 # define DYNALIB_DECL "cdecl6"
 # include "cdecl6.c"
@@ -54,6 +60,10 @@ extern "C" {
 #ifdef DYNALIB_USE_cdecl3
 # define DYNALIB_DECL "cdecl3"
 # include "cdecl3.c"
+#endif
+#ifdef DYNALIB_USE_cdecltr
+# define DYNALIB_DECL "cdecltr"
+# include "cdecltr.c"
 #endif
 #ifdef DYNALIB_USE_cdecl
 # define DYNALIB_DECL "cdecl"
@@ -182,7 +192,7 @@ cb_call_sub(index, first, ap)
 	case 'Q' :
 	    if (sizeof (unsigned Quad_t) <= sizeof first) {
 		sv = newSV(0);
-		sv_setuv(sv, PTR2UV((unsigned Quad_t) first));
+		sv_setuv(sv, PTR2UV((Uquad_t) first));
 		XPUSHs(sv_2mortal(sv));
 	    }
 	    else
@@ -244,7 +254,7 @@ cb_call_sub(index, first, ap)
 		XPUSHs(sv_2mortal(sv));
 		break;
 	    case 'Q' :
-		auquad = va_arg(ap, unsigned Quad_t);
+		auquad = va_arg(ap, Uquad_t);
 		sv = newSV(0);
 		if (aquad <= UV_MAX)
 		    sv_setuv(sv, (UV)auquad);
@@ -321,7 +331,7 @@ cb_call_sub(index, first, ap)
 	result = (long) (int) POPi;
 	break;
     case 'I' :
-	result = (long) (unsigned int) POPu;
+	result = (long) (uint) POPu;
 	break;
 #if defined(HAS_QUAD) && LONGSIZE >= 8
     case 'q' :
