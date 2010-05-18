@@ -29,6 +29,11 @@
 #else
 #define debprintf(x)
 #endif
+#ifdef DEBUG
+#define deb1printf(x)  printf x
+#else
+#define deb1printf(x)
+#endif
 
 /*          0003709d,0009675a,003acacb,359c46d6,05261433,
             00fca2d6,00016fcf,004aa9c6,04a2cd24 */
@@ -40,9 +45,8 @@ int reverse = 0;
 int stack_align;       /* diff between two alloca's, 0x20 or 1 */
 int one_by_one = 1;    /* stack_align = 1 pointer */
 int do_adjust = 0;     /* write beyond that from the alloca pointer */
-int stack_reserve = 0; /* cdecl3: private data on top of call stack added later, 
+int stack_reserve = 0; /* cdecl3: locals on top of call stack added, 
 			  which cannot not be overwritten with alloca.
-			  New gcc ABI places in the 4 ptrs ahead. 
 			  3 unwritable pointers on -m32 and -m64 */
 int arg_align  = sizeof(I32); /* size of an I32 arg on the call stack. 4 or 8 */
 int do_reverse = 0;
@@ -50,13 +54,6 @@ int args_size[2];
 int adjust[]  = {0, 0};
 
 int *which;
-/* no locals! 
- * function locals need place on the stack, which forbids alloca 
- * access to the function params. So we use globals.
- */
-int i;
-char *arg;
-void *d1,*d2,*d3,*d4,*d5,*d6;
 
 void handler(int sig) {
   printf("abnormal exit 1\n");
@@ -64,13 +61,16 @@ void handler(int sig) {
     exit(1);
 }
 
-static int 
+/*
+int 
 test(b0, b1, b2, b3, b4, b5, b6, b7, b8)
      I32 b0, b1, b2, b3, b4, b5, b6, b7, b8;
-/*
-int test(I32 b0,I32 b1,I32 b2,I32 b3,I32 b4,I32 b5,I32 b6,I32 b7,I32 b8)
 */
+int
+test(I32 b0,I32 b1,I32 b2,I32 b3,I32 b4,I32 b5,I32 b6,I32 b7,I32 b8)
 {
+  int i;
+
   debprintf(("test: one_by_one=%d,do_adjust=%d,stack_reserve=%d,do_reverse=%d,arg_align=%d\n",
 	     one_by_one, do_adjust, stack_reserve, do_reverse, arg_align)); 
   if (b0 == a[0]
@@ -132,14 +132,19 @@ int test(I32 b0,I32 b1,I32 b2,I32 b3,I32 b4,I32 b5,I32 b6,I32 b7,I32 b8)
   return 0;
 }
 
-/* same number of locals as in cdecl.c! DYNALIB_ARGSTART = 3 */
+#ifdef RESERVE
 #define DO_INIT								\
-  register int i;							\
   char *arg;								\
-  STRLEN arg_len;
+  int i;								\
+  void *d1,*d2,*d3,*d4,*d5,*d6;						\
+  d1 = d2 = d3 = d4 = d5 = d6 = NULL
+#else
+#define DO_INIT								\
+  char *arg;								\
+  int i
+#endif
 
 #define DO_CALL								\
-  d1 = d2 = d3 = d4 = d5 = d6 = NULL;					\
   which = &adjust[0];							\
   if (one_by_one) {							\
     for (i = 8; i >= 0; i--) {						\
@@ -156,16 +161,17 @@ int test(I32 b0,I32 b1,I32 b2,I32 b3,I32 b4,I32 b5,I32 b6,I32 b7,I32 b8)
 	/* x86_64 aligns to 8 non zero-filled.				\
 	   http://blogs.msdn.com/oldnewthing/archive/2004/01/14/58579.aspx \
 	*/								\
-	/*debprintf(("  memzero(arg=%x, arg_align=%d)\n", arg, arg_align));*/ \
+	deb1printf(("  memzero(arg=%x, arg_align=%d)\n", arg, arg_align)); \
 	memzero(arg, arg_align);					\
       }									\
-      /*debprintf(("  memcpy(arg=%x,a[%d]=%08x)\n", arg, i, a[i]));*/	\
+      deb1printf(("  memcpy(arg=%x,a[%d]=%08x)\n", arg, i, a[i]));	\
       memcpy(arg,(const char*)&a[do_reverse ? 8-i : i], sizeof(I32));	\
       /*Copy(&a[do_reverse ? 8-i : i], arg, sizeof(I32), char);*/	\
       arg += arg_align;							\
     }									\
-  }									\
-									\
+  }
+
+#define DO_CALL2							\
   if (stack_reserve == 0) {						\
     return ((int (*)()) test)();					\
   }									\
@@ -176,6 +182,7 @@ int test(I32 b0,I32 b1,I32 b2,I32 b3,I32 b4,I32 b5,I32 b6,I32 b7,I32 b8)
     return ((int (*)()) test)(d1,d2,d3);				\
   }									\
   else if (stack_reserve == 6) {					\
+    /* amd64 uses rdi,rdx,rcx,rbx,r8,r9 for first 6 args */		\
     Copy(&a[do_reverse ? 8-0 : 0], &d1, sizeof(I32), char);		\
     Copy(&a[do_reverse ? 8-1 : 1], &d2, sizeof(I32), char);		\
     Copy(&a[do_reverse ? 8-2 : 2], &d3, sizeof(I32), char);		\
@@ -193,7 +200,6 @@ int test(I32 b0,I32 b1,I32 b2,I32 b3,I32 b4,I32 b5,I32 b6,I32 b7,I32 b8)
     return ((int (*)()) test)(d1,d2,d3,d4,d5);				\
   }									\
   else if (stack_reserve == 4) {					\
-    /* amd64 uses rdi,rdx,rcx,rbx,r8,r9 for first 6 args */		\
     Copy(&a[do_reverse ? 8-0 : 0], &d1, sizeof(I32), char);		\
     Copy(&a[do_reverse ? 8-1 : 1], &d2, sizeof(I32), char);		\
     Copy(&a[do_reverse ? 8-2 : 2], &d3, sizeof(I32), char);		\
@@ -217,8 +223,12 @@ int test(I32 b0,I32 b1,I32 b2,I32 b3,I32 b4,I32 b5,I32 b6,I32 b7,I32 b8)
 int do_no_arg()
 {
   DO_INIT;
-  args_size[0] = 0;
-  DO_CALL;
+  DO_CALL
+#ifdef RESERVE
+  DO_CALL2
+#else
+  return ((int (*)()) test)();
+#endif
 }
 
 int do_one_arg(x)
@@ -226,7 +236,12 @@ int do_one_arg(x)
 {
   DO_INIT;
   args_size[0] = sizeof(x);
-  DO_CALL;
+  DO_CALL
+#ifdef RESERVE
+  DO_CALL2
+#else
+  return ((int (*)()) test)();
+#endif
 }
 
 int do_three_args(x, y, z)
@@ -235,8 +250,13 @@ int do_three_args(x, y, z)
   double z;
 {
   DO_INIT;
-  args_size[0] = sizeof(x)+sizeof(y)+sizeof(z);
-  DO_CALL;
+  args_size[1] = sizeof x + sizeof y + sizeof z;
+  DO_CALL
+#ifdef RESERVE
+  DO_CALL2
+#else
+  return ((int (*)()) test)();
+#endif
 }
 
 int main(argc, argv)

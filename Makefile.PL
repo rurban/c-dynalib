@@ -96,8 +96,11 @@ unless (@convention) {
 	 )
     { @convention = &{$_->[1]}, last if $archname =~ /$_->[0]/i }
 }
+# when? see 75b18f7c2d75e
 # freebsd7 gcc3.4.6 cdecl ok   one_by_one=0,do_adjust=0,stack_reserve=0,do_reverse=0,arg_align=4
 # freebsd7 gcc4.2.1 cdecl ok   one_by_one=0,do_adjust=0,stack_reserve=0,do_reverse=0,arg_align=4
+#---
+# freebsd7 gcc4.2.1 cdecl3 ok  one_by_one=0,do_adjust=-16,stack_reserve=3,do_reverse=0,arg_align=4
 # cygwin7  gcc4.3.4 cdecl3 ok  one_by_one=0,do_adjust=-16,stack_reserve=3,do_reverse=0,arg_align=4
 # mingw    gcc3.4.5 cdecl fail one_by_one=0,do_adjust=-16,stack_reserve=3,do_reverse=0,arg_align=4
 # msvc6    cl 12    cdecl ok   one_by_one=1,do_adjust=0,stack_reserve=0,do_reverse=0,arg_align=4
@@ -109,7 +112,7 @@ if ($is_msvc) {
     $optimize = '/Od';
     $ccflags =~ s|[-/]O\d ||;
 } elsif ($Config{optimize} =~ /[\-\/]O\w/)  {
-    $optimize =~ s/O\w/O0/;
+    ; #$optimize =~ s/O\w/O0/;  # changing to -O0 turned out to be contra-productive
 }
 if ($is_gcc and $ccflags =~ /-DDEBUGGING/) {
     $optimize .= " -g";
@@ -522,20 +525,27 @@ sub write_cdecl_h {
 		$cmd =~ s/testcall.c -o testcall.E.c -E -P/testcall.E1.c -o testcall/;
 	    }
 	}
+      AGAIN:
 	unlink ("testcall$self->{EXE_EXT}", $cdecl_h);
 	print "$cmd\n" if $Verbose;
 	system ($cmd);
 	if ($? == 0 && -x "testcall$self->{EXE_EXT}") {
-	    $cmd = $self->{how_to_run};
-	    print "$cmd\n" if $Verbose;
-	    system ($cmd);
+	    my $runcmd = $self->{how_to_run};
+	    print "$runcmd\n" if $Verbose;
+	    system ($runcmd);
 	    if ($? == 0 && -e $cdecl_h) {
 		print "Succeeded.\n" if $Verbose;
 		return 1;
 	    }
 	    # compiled okay and executable: no need to try the two
 	    # other options no header and malloc
-	    last;
+	    if ($cmd =~ / -DRESERVE/) {
+		last;
+	    } else {
+		print "Try again with -DRESERVE\n" if $Verbose;
+		$cmd .= " -DRESERVE";
+		goto AGAIN;
+	    }
 	}
     }
     return undef;
