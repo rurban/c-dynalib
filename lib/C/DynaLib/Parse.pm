@@ -1,6 +1,6 @@
 package C::DynaLib::Parse;
 
-# common functions for function and struct parsers
+# common functions for function and struct parsers.
 # GCC::TranslationUnit (required) and Convert::Binary::C (optional)
 # Reini Urban 2010
 
@@ -22,7 +22,7 @@ our @post;
 my %records;
 
 # at first GCC::TranslationUnit alone functions
-
+# unused
 sub GCC {
   my $is_gcc = $Config{cc} =~ /gcc/i && $Config{gccversion} >= 3;
   if (!$is_gcc and $Config{cc} =~ /^cc/) {

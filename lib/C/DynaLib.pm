@@ -121,11 +121,11 @@ sub new {
 }
 
 sub LibRef {
-  ${$_->[0]};
+  $_[0]->[0];
 }
 
 sub LibDecl {
-  ${$_->[1]};
+  $_[0]->[1];
 }
 
 sub DESTROY {
@@ -551,20 +551,19 @@ This overrides LibDecl().
 The global $C::DynaLib::decl holds the string for the current
 global declaration convention.
 
-=item ->LibRef()
+=back
+
+=head2 ->LibRef()
 
 A library reference obtained from either C<DynaLoader::dl_load_file>
-or the C<C::DynaLib::LibRef> method. You must use a named-parameter
-form of C<DeclareSub> in order to specify this argument.
+or the C<C::DynaLib::LibRef> method. 
 
-=item ->LibDecl()
+=head2 ->LibDecl()
 
 Read the name of the calling convention in which this libary was 
-declared, the 2nd arg to new. Or the default calling convention.
+declared. The 2nd arg to new, or the default calling convention.
 All functions in this library are called with this calling convention 
 by default,
-
-=back
 
 =head2 PTR_TYPE()
 
@@ -776,14 +775,15 @@ though this is no strict _cdecl convention.
 Same as C<cdecl>, but with special-casing a new gcc limitation that on
 function calls without args, the first three or six pointers alloca'd 
 are reserved, they may not be overwritten. 
-This is no calling convention, just a fastcall-like hack. 
+
+This is not a calling convention, just a fastcall-like hack. 
 Argument types longer as the pointer-size will not work for the 
 first args, similar to 'hack30'. The subsequent args after the reserved 
 words may be longer (double, long double, long long, ...).
 
 The generated F<cdecl.h> contains some internal options for this
 declaration. CDECL_STACK_RESERVE = 1, 2, 3, 4 or 6.
-Valid names are only cdecl3 or cdecl6.
+Valid names are only C<cdecl3> or C<cdecl6>.
 
 =item C<cdecltr>
 

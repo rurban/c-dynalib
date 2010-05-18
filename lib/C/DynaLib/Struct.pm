@@ -234,7 +234,9 @@ sub Parse {
       # fixup wrong declarations: 'char'(type) '*baz'(declarator) => 'char*' 'baz'
       for (0..@{$s->{declarations}}) {
 	  my $d = $s->{declarations}->[$_];
-	  if (substr($d->{declarators}[0]->{declarator},0,1) eq '*') {
+	  if ($d and $d->{declarators}[0]->{declarator} 
+	      and substr($d->{declarators}[0]->{declarator},0,1) eq '*') 
+	  {
 	      $s->{declarations}->[$_]->{declarators}[0]->{declarator} = 
 		  substr($d->{declarators}[0]->{declarator},1);
 	      $s->{declarations}->[$_]->{type} .= "*";
