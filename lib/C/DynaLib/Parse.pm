@@ -1,12 +1,13 @@
 package C::DynaLib::Parse;
 
 # common functions for function and struct parsers.
-# GCC::TranslationUnit (required) and Convert::Binary::C (optional)
+# Using GCC::TranslationUnit (required, but does not work yet)
+# and Convert::Binary::C (optional).
 # Reini Urban 2010
 
 use strict;
 use vars qw(@ISA @EXPORT_OK);
-use Exporter 'import';
+use Exporter;# 'import';
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(pack_types process_struct process_func
 		declare_func declare_struct
@@ -37,7 +38,7 @@ sub GCC {
 sub GCC_prepare { # decl, [gcc]
   # XXX looks like file => c or c++
   my $code = shift;
-  my $cc = shift || 'gcc';
+  my $cc = shift || 'gcc'; # || gcc-xml
   my $tmp = File::Temp->new( TEMPLATE => "tmpXXXXX",
 			     SUFFIX => '.c' );
   my $tmpname = $tmp->filename;
@@ -57,7 +58,7 @@ sub GCC_prepare { # decl, [gcc]
 # on records and pointers we might need to create handy accessors per FFI.
 sub type_name {
   my $type = shift;
-  print $type->qual ? $type->qual." " : "";
+  #warn $type->qual ? $type->qual." " : "";
   if ($type->name and $type->name->can('name')) {
     return $type->name->name->identifier;
   } elsif (ref $type eq 'GCC::Node::pointer_type') {
@@ -66,7 +67,7 @@ sub type_name {
       my $struct = ref($node->name) =~ /type_decl/
 	? $node->name->name->identifier : $node->name->identifier;
       # mark struct $name to be dumped later, with decl and fields
-      push @post, $node unless $records{$struct};
+      push @C::DynaLib::Parse::post, $node unless $records{$struct};
       # prevent from recursive declarations
       $records{$struct}++;
       return $node->code . " $struct " . $type->thingy . type_name($node);

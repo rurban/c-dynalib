@@ -1,8 +1,11 @@
 package C::DynaLib::Struct;
 require 5.002;
 use C::DynaLib;
-use C::DynaLib::Parse qw(pack_types declare_func declare_struct
-			 process_struct process_func);
+BEGIN {
+  if ($] > 5.008) {
+    require C::DynaLib::Parse;
+  }
+}
 
 =head1 NAME
 
@@ -107,6 +110,13 @@ L<Convert::Binary::C>, L<perlfunc(1)> (for C<pack>), L<perlref(1)>, L<perltie(1)
 
 use strict qw (vars subs);
 use subs qw(Define Parse);
+if ($] > 5.008) {
+  *C::DynaLib::Struct::pack_types     = *C::DynaLib::Parse::pack_types;
+  *C::DynaLib::Struct::declare_func   = *C::DynaLib::Parse::declare_func;
+  *C::DynaLib::Struct::declare_struct = *C::DynaLib::Parse::declare_struct;
+  *C::DynaLib::Struct::process_func   = *C::DynaLib::Parse::process_func;
+  *C::DynaLib::Struct::process_struct = *C::DynaLib::Parse::process_struct;
+}
 
 package C::DynaLib::Struct::Imp;
 
@@ -235,9 +245,9 @@ sub Parse {
       for (0..@{$s->{declarations}}) {
 	  my $d = $s->{declarations}->[$_];
 	  if ($d and $d->{declarators}[0]->{declarator} 
-	      and substr($d->{declarators}[0]->{declarator},0,1) eq '*') 
+	      and substr($d->{declarators}[0]->{declarator},0,1) eq '*')
 	  {
-	      $s->{declarations}->[$_]->{declarators}[0]->{declarator} = 
+	      $s->{declarations}->[$_]->{declarators}[0]->{declarator} =
 		  substr($d->{declarators}[0]->{declarator},1);
 	      $s->{declarations}->[$_]->{type} .= "*";
 	  }
@@ -248,14 +258,14 @@ sub Parse {
 				\@members);
     }
   } else {
-    # use GCC::TranslationUnit
-    my $node = GCC_prepare($definition);
+    # XXX use GCC::TranslationUnit (does not work yet)
+    my $node = C::DynaLib::Parse::GCC_prepare($definition);
     while ($node) {
       if ($node->isa('GCC::Node::function_decl')) {
-	declare_func process_func($node);
+	declare_func(process_func($node));
       }
       if ($node->isa('GCC::Node::record_type')) {
-	declare_struct process_struct($node);
+	declare_struct(process_struct($node));
       }
     } continue {
       $node = $node->chain;
@@ -263,7 +273,7 @@ sub Parse {
   POST:
     while ($node = shift @C::DynaLib::Parse::post) {
       if ($node->isa('GCC::Node::record_type')) {
-	declare_struct process_struct($node);
+	declare_struct(process_struct($node));
       }
     }
   }

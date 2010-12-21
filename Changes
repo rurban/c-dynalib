@@ -15,7 +15,8 @@ Revision history for Perl extension C::DynaLib
 	added dl_unload_file as used by dlopen/win32 platforms 
           (most fortunately)
 	fix msvc6 activeperl 5.10 against malloc/free/realloc defines
-        fix C::DynaLib::Struct::Parse
+        work on C::DynaLib::Struct::Parse
+        fix old symbols on Dynalib.xs for >5.12: na, errgv
 
 0.60  2010-04-20 23:55:12 rurban
         Improve library search and windows resolution:

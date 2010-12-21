@@ -90,8 +90,8 @@ unless (@convention) {
 		   $object .= " alpha-cc.o";
 	       }
 	       'alpha'} ],
-	 [ 'win32', sub {('cdecl','stdcall')} ],
-	 [ '^cygwin', sub {my $CDECL_ADJUST = -32; ('cdecl','stdcall')} ],
+	 [ 'win32', sub {'stdcall'} ],
+	 #[ '^cygwin', sub {my $CDECL_ADJUST = -32; ('cdecl','stdcall')} ],
 	 [ '', sub { () } ],
 	 )
     { @convention = &{$_->[1]}, last if $archname =~ /$_->[0]/i }
@@ -322,7 +322,8 @@ sub guess_cdecl_h {
     $self->{how_to_compile} =~ s/testtest/testreverse/g;
     $self->{how_to_run} =~ s/testtest/testreverse/g;
     my $defines;
-    for $defines ("-DINCLUDE_ALLOCA", "", "-DINCLUDE_MALLOC") {
+    for ("-DINCLUDE_ALLOCA", "", "-DINCLUDE_MALLOC") {
+        $defines = $_;
 	my $cmd = $self->{how_to_compile};
 	$defines .= " -g" if $is_gcc;
 	$defines .= " -DVERBOSE" if $Verbose;
@@ -392,7 +393,7 @@ sub make_postamble {
 		@convention = ('cdecl');
 	    }
 	    if ($reverse or $is_win32) {
-		push @convention, 'stdcall';
+		push @convention, 'stdcall' unless grep /^stdcall$/, @convention;
 		print "Using conventions: @convention\n";
 	    }
 	}
@@ -400,12 +401,13 @@ sub make_postamble {
 	print "Can't figure out this system.  I'll have to guess.\n"
 	    if $Verbose;
 	guess_cdecl_h($self);
-	if ($do_reverse) {
+	if ($do_reverse and !grep /^stdcall$/, @convention) {
 	    push @convention, 'stdcall';
 	    print "Using conventions: @convention\n";
 	}
 	elsif ($is_win32) {
-	    push @convention, 'stdcall', 'hack30';
+	    push @convention, 'stdcall' unless grep /^stdcall$/, @convention;
+            push @convention, 'hack30' unless grep /^hack30$/, @convention;
 	    print "Using conventions: @convention\n";
 	}
     } else {

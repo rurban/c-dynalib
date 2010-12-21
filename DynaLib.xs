@@ -146,7 +146,7 @@ cb_call_sub(index, first, ap)
 #endif
     static char *first_msg = "Can't use '%c' as first argument type in callback";
 
-    config = (cb_entry *) SvPV(*av_fetch(cb_av_config, index, 0), na);
+    config = (cb_entry *) SvPV(*av_fetch(cb_av_config, index, 0), PL_na);
     ENTER;
     SAVETMPS;
     PUSHMARK(sp);
@@ -287,7 +287,7 @@ cb_call_sub(index, first, ap)
     }
     PUTBACK;
 
-    if (in_eval) {
+    if (PL_in_eval) {
 	/*
 	 * XXX The whole issue of G_KEEPERR and `eval's is very confusing
 	 * to me. For example, we should be able to tell whether or not we
@@ -300,12 +300,12 @@ cb_call_sub(index, first, ap)
 	 *
 	 * It can also produce weirdness when used with Carp::confess.
 	 */
-	SvPV(GvSV(errgv), old_err_len);
+	SvPV(GvSV(PL_errgv), old_err_len);
 	nret = perl_call_sv(config->coderef, G_SCALAR | G_EVAL | G_KEEPERR);
 	SPAGAIN;
-	SvPV(GvSV(errgv), new_err_len);
+	SvPV(GvSV(PL_errgv), new_err_len);
 	if (new_err_len > old_err_len) {
-	    char *msg = SvPV(GvSV(errgv),na);
+	    char *msg = SvPV(GvSV(PL_errgv), PL_na);
 	    static char prefix[] = "\t(in cleanup) ";  /* from pp_ctl.c */
 
 	    if (old_err_len == 0 && strnEQ(msg, prefix, (sizeof prefix) - 1)) {

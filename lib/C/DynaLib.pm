@@ -235,9 +235,9 @@ sub Parse {
     $filter = shift;
   }
   require C::DynaLib::Parse;
-  C::DynaLib::Parse->import qw(declare_func declare_struct
-			       pack_types process_struct process_func);
-  my $node = GCC_prepare($code, $cc);
+  C::DynaLib::Parse->import (qw(declare_func declare_struct
+			       pack_types process_struct process_func));
+  my $node = C::DynaLib::Parse::GCC_prepare($code, $cc);
   while ($node) {
     if ($node->isa('GCC::Node::function_decl')
 	and ($filter ? $node->name->identifier =~ /$filter/
