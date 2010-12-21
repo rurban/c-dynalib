@@ -393,7 +393,7 @@ sub make_postamble {
 	    }
 	    if ($reverse or $is_win32) {
 		push @convention, 'stdcall';
-		print "Using conventions: @convention\n"; 
+		print "Using conventions: @convention\n";
 	    }
 	}
     } elsif (@convention) {
@@ -402,11 +402,11 @@ sub make_postamble {
 	guess_cdecl_h($self);
 	if ($do_reverse) {
 	    push @convention, 'stdcall';
-	    print "Using conventions: @convention\n"; 
+	    print "Using conventions: @convention\n";
 	}
 	elsif ($is_win32) {
 	    push @convention, 'stdcall', 'hack30';
-	    print "Using conventions: @convention\n"; 
+	    print "Using conventions: @convention\n";
 	}
     } else {
 	print <<WARN;
@@ -433,7 +433,9 @@ WARN
 clean::
 	\$(RM_F) testreverse\$(EXE_EXT) testreverse\$(OBJ_EXT) testcall\$(EXE_EXT) testcall\$(OBJ_EXT) $cdecl_h
 
-DynaLib\$(OBJ_EXT): $cdecl_h
+DynaLib\$(OBJ_EXT): $cdecl_h ";
+    $postamble .= join(" ", map { $_.".c"} @convention);
+    $postamble .= "
 
 $cdecl_h: $0 \$(CONFIGDEP) testcall\$(EXE_EXT)
 	$self->{how_to_run}

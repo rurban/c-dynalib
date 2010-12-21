@@ -19,40 +19,50 @@ cdecl6_pray(ax, items, func)
   register int i;
   void* d1, *d2, *d3, *d4, *d5, *d6;
   d1 = d2 = d3 = d4 = d5 = d6 = NULL;
+  STRLEN total_arg_len = 0;
+  STRLEN stack_reserve_len = 0;
+
+  if (!items)
+    return ((int (*)()) func)();
 
 #if CDECL_ONE_BY_ONE
 
 #if CDECL_REVERSE
-  for (i = DYNALIB_ARGSTART; i < items; i++) {
+  for (i = CDECL_STACK_RESERVE; i < items; i++) {
 #else  /* ! CDECL_REVERSE */
-  for (i = items - 1; i >= DYNALIB_ARGSTART; i--) {
+  for (i = items - 1; i >= CDECL_STACK_RESERVE; i--) {
 #endif  /* ! CDECL_REVERSE */
     arg_scalar = SvPV(ST(i), arg_len);
     arg_on_stack = alloca(arg_len);
     Copy(arg_scalar, arg_on_stack, arg_len, char);
   }
 #else  /* ! CDECL_ONE_BY_ONE */
-  STRLEN total_arg_len = 0;
-
-  for (i = items; i-- > 0; ) {
+  for (i = items; i-- > CDECL_STACK_RESERVE; ) {
     (void) SvPV(ST(i), arg_len);
     /* CDECL_ARG_ALIGN=8 for amd64 */
     total_arg_len += min(arg_len, CDECL_ARG_ALIGN);
   }
+  for (i = CDECL_STACK_RESERVE; i-- > 0; ) {
+    (void) SvPV(ST(i), arg_len);
+    stack_reserve_len += arg_len;
+  }
   arg_on_stack = (char *) alloca(total_arg_len);
   arg_on_stack += CDECL_ADJUST;
+  arg_on_stack += stack_reserve_len;
 #if CDECL_REVERSE
-  for (i = items - 1; i >= 0; i--) {
+  for (i = items - 1; i >= CDECL_STACK_RESERVE; i--) {
 #else  /* ! CDECL_REVERSE */
-  for (i = 0; i < items; i++) {
+  for (i = CDECL_STACK_RESERVE; i < items; i++) {
 #endif  /* ! CDECL_REVERSE */
     arg_scalar = SvPV(ST(i), arg_len);
-    if (sizeof(void*) == 8 && arg_len < 8) { 
+#ifdef __x86_64__
+    if (arg_len < 8) { 
       /* amd64 aligns to 8, so zero the values of smaller args.
 	 http://blogs.msdn.com/oldnewthing/archive/2004/01/14/58579.aspx
       */
       memzero(arg_on_stack, 8);
     }
+#endif
     Copy(arg_scalar, arg_on_stack, arg_len, char);
     arg_on_stack += min(arg_len, CDECL_ARG_ALIGN);
   }
@@ -117,9 +127,6 @@ cdecl6_pray(ax, items, func)
     arg_scalar = SvPV(ST(0), arg_len);
     Copy(arg_scalar, &d1, arg_len, char);
     return ((int (*)()) func)(d1);
-  }
-  else if (items == 0) {
-    return ((int (*)()) func)();
   }
   else {
     printf("invalid CDECL_STACK_RESERVE=%d\n", CDECL_STACK_RESERVE);

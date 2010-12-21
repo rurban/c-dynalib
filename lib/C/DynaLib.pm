@@ -71,7 +71,7 @@ sub new {
       $lib =~ s/^-l//;
       if ($^O eq 'cygwin' and $lib =~ m{^(c|m|pthread|/usr/lib/libc\.a)$}) {
         $lib = DynaLoader::dl_load_file("/bin/cygwin1.dll", @_);
-        return bless \$lib, $class;
+        return bless [$lib, $decl], $class;
       }
       if ($^O eq 'MSWin32' and $lib =~ /^(c|m|msvcrt|msvcrt\.lib)$/) {
         if ($lib = DynaLoader::dl_load_file($ENV{SYSTEMROOT}.
@@ -146,7 +146,7 @@ sub DeclareSub {
   my $first = ($is_method ? shift : $self);
 
   my ($libref, $name, $ptr, @arg_type);
-  my ($convention, $ret_type) = ($self->LibDecl, '');
+  my ($convention, $ret_type) = ($is_method ? $self->LibDecl : $DefConv, '');
 
   if (ref($first) eq 'HASH') {
 

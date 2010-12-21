@@ -113,8 +113,8 @@ my $ptr_len = length(pack("p", $tmp = "foo"));
 my $fopen_ptr = DynaLoader::dl_find_symbol($libc->LibRef(), "fopen")
   or die DynaLoader::dl_error();
 my $fopen = DeclareSub ({ "ptr" => $fopen_ptr,
-		       "return" => PTR_TYPE,
-		       "args" => ["p", "p"] });
+                          "return" => PTR_TYPE,
+                          "args" => ["p", "p"] });
 
 open TEST, ">tmp.tmp"
   or die "Can't write file tmp.tmp: $!\n";
